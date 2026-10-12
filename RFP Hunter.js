@@ -95,10 +95,10 @@ const CONFIG = {
 
     GEMINI_GROUNDED_SEARCH_MODELS: ['gemini-2.0-flash', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'],
     GEMINI_MODEL_FALLBACK_CHAIN: [
-        'gemini-3.8-flash',
+        'gemini-3.5-flash-lite',
         'gemini-3.5-flash',
         'gemini-3.7-flash',
-        'gemini-3.5-flash-lite'
+        'gemini-3.8-flash'
     ],
     GEMINI_MAX_MODEL_ATTEMPTS: 4,
     // OpenAI-compatible fallback providers. Model IDs are current as of
@@ -4191,7 +4191,7 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
 let _geminiWorkingModelIndex = 0;
 function runWithGeminiModelChain(apiKey, attemptFn, contextLabel) {
     const configured = (CONFIG.GEMINI_MODEL_FALLBACK_CHAIN || []).slice();
-    const fallback = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite'];
+    const fallback = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
     const modelChain = configured.length ? configured : fallback;
     const maxAttempts = Math.min(modelChain.length, Number(CONFIG.GEMINI_MAX_MODEL_ATTEMPTS || modelChain.length));
     const label = contextLabel ? ` ${contextLabel}` : '';
