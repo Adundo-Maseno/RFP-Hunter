@@ -1076,9 +1076,9 @@ function runRfpTrackerV4() {
         // CALIBRATION 1C: Individual Consultancy Filter
         // Agri Experience is a corporate consulting firm. Filter out all freelance individual consultancies.
         const combinedIndividualText = `${item.title} ${item.description || ''} ${evalResult.summary || ''}`.toLowerCase();
-        const INDIVIDUAL_CONSULTANCY_REGEX = /\b(?:individual\s+consultants?|individual\s+consultancy|junior\s+consultants?|senior\s+consultants?|individual\s+contractors?|individual\s+specialists?|consultant\s+individuel|consultante\s+individuelle|international\s+individual|national\s+individual|recrutement\s+d'un\s+consultant\s+individuel|recrutement\s+d'un\s+consultant\s+\(individuel\)|selection\s+of\s+individual\s+consultants?|single\s+consultant|solo\s+consultant|personal\s+consultant)\b/i;
+        const INDIVIDUAL_CONSULTANCY_REGEX = /\b(?:national\s+consultants?|individual\s+consultants?|individual\s+consultancy|junior\s+consultants?|senior\s+consultants?|senior\s+advisors?|individual\s+contractors?|individual\s+specialists?|consultant\s+individuel|consultante\s+individuelle|international\s+individual|national\s+individual|recrutement\s+d'un\s+consultant\s+individuel|recrutement\s+d'un\s+consultant\s+\(individuel\)|selection\s+of\s+individual\s+consultants?|single\s+consultant|solo\s+consultant|personal\s+consultant|nob\s+level|noa\s+level|noc\s+level)\b/i;
         const isIndividualConsultancy = INDIVIDUAL_CONSULTANCY_REGEX.test(combinedIndividualText) ||
-            /\b(?:individual\s+consultants?|junior\s+consultants?|individual\s+consultancy)\b/i.test(item.title);
+            /\b(?:individual\s+consultants?|junior\s+consultants?|national\s+consultants?|individual\s+consultancy)\b/i.test(item.title);
         const hasFirmContext = /\b(?:consulting\s+firms?|consortium|institutional|firm|agency|company)\b/i.test(item.title);
         if (isIndividualConsultancy && !hasFirmContext) {
             Logger.log(`[Individual Consultancy Filter] Strictly filtered out individual consultancy: "${item.title}"`);
@@ -1237,12 +1237,15 @@ function runRfpTrackerV4() {
         }
 
         // CALIBRATION 5: Strict African Geography Gate for Active Sheet
-        // Drop foreign non-African notices (Cambodia, Sri Lanka, Latin America, Caribbean, Barbados, etc.)
-        const nonAfricanRegionRegex = /\b(cambodia|sri lanka|latin america|caribbean|\blac\b|barbados|st kitts|saint kitts|nevis|eastern caribbean|guyana|trinidad|jamaica|haiti|bahamas|belize|fiji|pacific|papua new guinea|morocco|asia|india|pakistan|bangladesh|nepal|vietnam|indonesia|philippines|myanmar|brazil|peru|colombia)\b/i;
-        const nonAfricanUrlRegex = /(?:barbados|caribbean|undpbarbadosec|st[\s._-]?kitts|nevis|guyana|trinidad|jamaica|haiti|bahamas|belize|fiji|pacific|sri[\s._-]?lanka|cambodia|vietnam|indonesia|philippines|myanmar|brazil|colombia)/i;
-        const geoCheckText = `${item.title} ${item.description || ''} ${evalResult.summary || ''}`;
-        const hasAfricanCountry = AFRICAN_COUNTRIES_REGEX.test(geoCheckText.toLowerCase());
-        const isExplicitlyNonAfrican = (nonAfricanRegionRegex.test(geoCheckText) || nonAfricanUrlRegex.test(item.link || '')) && !hasAfricanCountry;
+        // Drop foreign non-African notices (Cambodia, Sri Lanka, Latin America, Caribbean, Barbados, Pakistan, etc.)
+        const nonAfricanRegionRegex = /\b(cambodia|sri lanka|latin america|caribbean|\blac\b|barbados|st kitts|saint kitts|nevis|eastern caribbean|guyana|trinidad|jamaica|haiti|bahamas|belize|fiji|pacific|papua new guinea|morocco|asia|india|pakistan|balochistan|bangladesh|nepal|vietnam|indonesia|philippines|myanmar|brazil|peru|colombia)\b/i;
+        const nonAfricanUrlRegex = /(?:barbados|caribbean|undpbarbadosec|st[\s._-]?kitts|nevis|guyana|trinidad|jamaica|haiti|bahamas|belize|fiji|pacific|sri[\s._-]?lanka|cambodia|vietnam|indonesia|philippines|myanmar|brazil|colombia|pakistan|balochistan)/i;
+        // Check source title, link, and description objectively to avoid AI summary hallucinated country bypass
+        const sourceCheckText = `${item.title} ${item.description || ''}`.toLowerCase();
+        const hasAfricanCountryInSource = AFRICAN_COUNTRIES_REGEX.test(sourceCheckText) || AFRICAN_REGION_REGEX.test(sourceCheckText);
+        const isUrlExplicitlyNonAfrican = nonAfricanUrlRegex.test(item.link || '');
+        const isRegionExplicitlyNonAfrican = nonAfricanRegionRegex.test(sourceCheckText) && !hasAfricanCountryInSource;
+        const isExplicitlyNonAfrican = isUrlExplicitlyNonAfrican || isRegionExplicitlyNonAfrican;
         if (isExplicitlyNonAfrican) {
             Logger.log(`[Geography Gate] Filtered non-African opportunity: "${item.title}"`);
             const oppCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link);
@@ -4684,9 +4687,9 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
         return;
     }
 
-    // Pre-AI negative filter: discard obvious civil works, railway, and municipal hardware lacking seed/crop context
+    // Pre-AI negative filter: discard obvious civil works, railway, municipal hardware, curriculum, medical supplies, and non-agri sectors lacking seed/crop context
 
-    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set)\b/i;
+    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban)\b/i;
     if (NON_AGRI_CIVIL_WORKS_REGEX.test(combinedText)) {
         const hasSeedOrCrop = CORE_SEED_KEYWORDS.some(k => combinedText.includes(k.toLowerCase())) || /\b(seed|variety|breeder|germplasm|crop|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|gmo|biosafety|biotech|transgenic|agtech|agritech|agri[-\s]?tech)s?\b/i.test(combinedText);
         if (!hasSeedOrCrop) {
