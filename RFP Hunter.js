@@ -1,62 +1,42 @@
 /**
  * ==============================================================================
- * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.17 (ENTERPRISE PRODUCTION EDITION)
+ * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.18 (ENTERPRISE PRODUCTION EDITION)
  * ==============================================================================
  *
  * FIRM PROFILE: Agri Experience Ltd (Nairobi, Kenya)
  * Primary Focus: Seed Systems, AgTech, Policy & Regulatory Advisory, and Agricultural
  * Transformation across 21+ Sub-Saharan African Countries.
  *
- * MAJOR ENHANCEMENTS IN VERSION 5.17:
- *  1. GMO & BIOSAFETY LEXICON INTEGRATION (PILLAR 3):
- *     - Comprehensive 30+ keyword lexicon added to CORE_SEED_KEYWORDS (3x scoring weight),
- *       including transgenic crops (Bt cotton, Bt maize, Bt cowpea), CRISPR/gene editing,
- *       National Biosafety Authority (NBA) frameworks, and variety deregulation guidelines.
- *     - Strict word-boundary matching (\b) for 3-letter acronyms (gmo, qds, vin, etc.)
- *       to prevent false substring collisions inside normal English tokens.
- *     - Full feed-level query targeting added to Google Open Web, LinkedIn, X, and Facebook.
+ * MAJOR ENHANCEMENTS IN VERSION 5.18:
+ *  1. GROUNDED FIRM PROFILE & ANTI-HALLUCINATION GUARDRAILS:
+ *     - Explicit consulting practice boundary grounding: Agri Experience Ltd is strictly
+ *       a management and technical advisory consulting firm, never a physical seed vendor
+ *       or commodity merchant.
+ *     - Anti-hallucination mandate in AI base prompt: Strictly forbids fabricating issuing
+ *       client names (e.g. inventing "Kenya Seed Company Limited" for general tenders).
+ *     - Evaluator model chain prioritized to gemini-3.8-flash and gemini-3.5-flash ahead of
+ *       flash-lite to ensure high semantic fidelity and zero entity hallucinations.
  *
- *  2. DEDICATED CIMMYT (CGIAR) PROCUREMENT & CONSULTANCIES FEED:
- *     - Native integration with CIMMYT's official Workable ATS Widget API (account 577052),
- *       capturing active research fellowships, breeding rosters, and scientist positions.
- *     - Web card scraper targeting cimmyt.org/careers/ for active competitive tenders.
- *     - Focused African station filtering (Kenya, Zimbabwe, Senegal, etc.) while skipping
- *       routine non-consulting administrative and manual labor positions.
+ *  2. DETERMINISTIC PHYSICAL COMMODITY & SEED SUPPLY CAPPER:
+ *     - Hard code guard (Calibration 1G) capping tenders for purchasing or supplying physical
+ *       goods (crop seeds, seedlings, grain, fertilizer, tractors, equipment) at <= 20% NO-GO
+ *       and routing to Filtered Out unless explicit consulting/advisory scope exists.
  *
- *  3. AGTECH, DIGITAL EXTENSION & AI-POWERED ADVISORY ELEVATION (PILLARS 4 & 5):
- *     - Elevated AgTech, AI in extension, digital farmer advisory platforms (MbeguChoice),
- *       seed traceability (M3/RIMI), and smallholder FinTech scale-up to core HIGH-FIT status.
- *     - Added the AgTech Consistency Guard in the evaluation loop to prevent false-negative
- *       rejections of high-value donor grants (IFAD AI Solutions, PoLG AgTech scale-up).
+ *  3. SALARIED RECRUITMENT & JOB VACANCY PRE-AI SUPPRESSION:
+ *     - Universal URL slug and text regex detecting employee hiring notices ("were-hiring",
+ *       "we-are-hiring", "job-vacancy", "staff-recruitment"), dropping them pre-AI.
  *
- *  4. PRECISION POST-AI SCORING & ROUTING CALIBRATIONS:
- *     - Seed Association / Regulatory Partner Boost: Direct consultancies partnered with
- *       STAK, TASTA, AFSTA, KEPHIS, TOSCI, SCCI, or TASAI automatically receive 92–95% GO.
- *     - Physical Commodity & Equipment Supply Capping: Pure physical tenders (grain bags,
- *       sesame seed delivery, drying cabinets, machinery) lacking advisory scope are capped
- *       at <= 40% and routed to Filtered Out, keeping the active list 100% consulting-focused.
- *     - Strict Sub-Saharan African Geography Gate: Automatically filters non-African regional
- *       notices (Cambodia, Sri Lanka, Latin America, Caribbean) from the active sheet.
- *     - Social Vendor Marketing Filter: Distinguishes vendor service promotional advertising
- *       from genuine client-issued Requests for Proposals.
- *     - Practice Pillar Normalization: Standardizes canonical pillar names and strips
- *       inconsistent numerical prefixes ("7 - ", "1. ").
+ *  4. YOUTH PITCH CONTEST & CASH PRIZE CHALLENGE FILTRATION:
+ *     - Expanded hackathon and competition filters to suppress youth entrepreneurship
+ *       competitions offering cash prizes and mentorship, keeping the list firm-level.
  *
- *  5. PERFORMANCE, RELIABILITY & POOL PRIORITIZATION ARCHITECTURE:
- *     - Smart URL Canonicalization (canonicalizeUrl): Strips tracking query parameters
- *       (UTMs, fbclid, gclid, ref, source), trailing slashes, and hash fragments for O(1) dedup.
- *     - Prefix-Stripped Title Matching (normalizeTitleKey + isFuzzyTitleDuplicate): Removes
- *       boilerplate procurement prefixes to deduplicate cross-portal syndicated tenders.
- *     - Round-Robin Pool Prioritization: All opportunities already logged on either the Active
- *       or Filtered sheets are bypassed immediately in sampleRoundRobin(), ensuring 100% of the
- *       AI evaluation pool is dedicated to discovering and evaluating fresh opportunities.
- *     - Wall-Clock Timeout Safety Guard: Monitors execution time and exits gracefully at
- *       25 minutes (safely below Google Workspace Business's 30-minute hard limit) to guarantee
- *       zero data loss during API latency.
- *     - Automated Deadline Expiry Maintenance: Automatically transitions past-deadline tenders
- *       from OPEN to CLOSED / EXPIRED at the start of every run.
- *     - Built-in Automation Triggers Menu: 1-click installation of recommended Every 6 Hours
- *       or Daily schedules directly from the Google Sheets "RFP Hunter" menu.
+ *  5. URBAN MUNICIPAL PLANNING & NON-AGRI POLICY FILTER:
+ *     - Hard guard (Calibration 1H) dropping urban planning, city charters, and municipal
+ *       governance tenders lacking core crop/seed/agriculture scope.
+ *
+ *  6. PROCUREMENT REFERENCE CODE DEDUPLICATION:
+ *     - Automatically extracts unique procurement codes (e.g. PRQ20251314, OP00474383) across
+ *       web URLs and syndicated PDF documents for O(1) cross-format duplicate rejection.
  *
  * ==============================================================================
  */
@@ -115,10 +95,10 @@ const CONFIG = {
 
     GEMINI_GROUNDED_SEARCH_MODELS: ['gemini-2.0-flash', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'],
     GEMINI_MODEL_FALLBACK_CHAIN: [
-        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
         'gemini-3.5-flash',
         'gemini-3.7-flash',
-        'gemini-3.8-flash'
+        'gemini-3.5-flash-lite'
     ],
     GEMINI_MAX_MODEL_ATTEMPTS: 4,
     // OpenAI-compatible fallback providers. Model IDs are current as of
@@ -897,10 +877,12 @@ function runRfpTrackerV4() {
     const sheet = getOrCreateSheet();
     const filteredSheet = getOrCreateFilteredSheet();
     updateExpiredProposalsStatus(sheet);
-    const { links: existingLinks, titleKeys: existingTitleKeys } = getExistingLinksAndTitleKeys(sheet);
-    const { links: existingFilteredLinks, titleKeys: existingFilteredTitleKeys } = getExistingLinksAndTitleKeys(filteredSheet);
+    const { links: existingLinks, titleKeys: existingTitleKeys, refCodes: existingRefCodes } = getExistingLinksAndTitleKeys(sheet);
+    const { links: existingFilteredLinks, titleKeys: existingFilteredTitleKeys, refCodes: existingFilteredRefCodes } = getExistingLinksAndTitleKeys(filteredSheet);
     existingFilteredLinks.forEach(link => existingLinks.add(link));
     existingFilteredTitleKeys.forEach(key => existingTitleKeys.add(key));
+    existingFilteredRefCodes.forEach(code => existingRefCodes.add(code));
+    existingLinks.refCodes = existingRefCodes;
 
     // Snapshot pre-discovery sheet entries so sampleRoundRobin skips items already logged on sheet
 
@@ -1066,7 +1048,7 @@ function runRfpTrackerV4() {
             evalResult.isOpen = false;
         }
 
-        const NON_PROCUREMENT_SUMMARY_REGEX = /\b(?:rather than an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|not an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|institutional document page(?: rather than)?|broad (?:[a-z]+\s+)?(?:institutional|organizational) document page|lacks specific submission details|not a current open solicitation|not an open solicitation|not an actionable (?:procurement|solicitation|tender|opportunity)|closed as a business opportunity|event rather than a (?:procurement|tender|solicitation)|hackathon event rather than|social media post discussing|vendor offering services rather than|personal social media advertisement|personal service promotional|personal services? offering)\b/i;
+        const NON_PROCUREMENT_SUMMARY_REGEX = /\b(?:rather than an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|not an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|institutional document page(?: rather than)?|broad (?:[a-z]+\s+)?(?:institutional|organizational) document page|lacks specific submission details|not a current open solicitation|not an open solicitation|not an actionable (?:procurement|solicitation|tender|opportunity)|closed as a business opportunity|event rather than a (?:procurement|tender|solicitation)|hackathon event rather than|social media post discussing|vendor offering services rather than|personal social media advertisement|personal service promotional|personal services? offering|salaried\s+(?:employment|job|recruitment)|job\s+vacanc(?:y|ies)|employee\s+recruitment|we(?:\'re|[\s_-]?are)\s+hiring|contest\s+providing\s+cash\s+prizes|cash\s+prizes?\s+and\s+mentorship)\b/i;
         let isAiNonProcurementSummary = NON_PROCUREMENT_SUMMARY_REGEX.test(evalResult.summary || '');
         if (isAiNonProcurementSummary) {
             // Guard against false-negative AI document hallucinations for official MDB/donor solicitations
@@ -1126,7 +1108,7 @@ function runRfpTrackerV4() {
 
         // CALIBRATION 1E: Hackathon, Developer Coding Challenge & Prize Contest Filter
         const combinedHackathonText = `${item.title} ${item.description || ''} ${item.link || ''} ${evalResult.summary || ''}`.toLowerCase();
-        const HACKATHON_REGEX = /\b(?:hackathons?|ideathons?|datathons?|buildathons?|coding\s+challenges?|developer\s+challenges?|app\s+challenges?|pitch\s+competitions?|cash\s+prizes?\s+(?:recognise|for|awarded|to\s+first|to\s+1st)|teams?\s+of\s+up\s+to\s+(?:2|3|4|5)\s+(?:members|developers|people|youth)|top\s+\d+\s+teams\s+receive\s+(?:mentorship|attendance|tickets)|funded\s+attendance\s+at\s+the\s+[a-z0-9\s]+conference|agentic\s+africa\s+challenge)\b/i;
+        const HACKATHON_REGEX = /\b(?:hackathons?|ideathons?|datathons?|buildathons?|coding\s+challenges?|developer\s+challenges?|app\s+challenges?|pitch\s+competitions?|innovation\s+contests?|cash\s+prizes?|prize\s+money|win\s+up\s+to\s+\$|teams?\s+of\s+up\s+to\s+(?:2|3|4|5)\s+(?:members|developers|people|youth)|top\s+\d+\s+teams\s+receive\s+(?:mentorship|attendance|tickets)|funded\s+attendance\s+at\s+the\s+[a-z0-9\s]+conference|agentic\s+africa\s+challenge|(?:win|receive|providing)\s+cash\s+prizes?\s+and\s+mentorship)\b/i;
         const isInstitutionalChallengeFund = /\b(?:challenge\s+funds?|enterprise\s+challenge\s+fund|aecf)\b/i.test(item.title);
         if (HACKATHON_REGEX.test(combinedHackathonText) && !isInstitutionalChallengeFund) {
             Logger.log(`[Hackathon Filter] Strictly filtered out developer hackathon / prize challenge: "${item.title}"`);
@@ -1152,6 +1134,43 @@ function runRfpTrackerV4() {
             evalResult.businessFit = 'NONE';
             evalResult.goNoGo = 'NO-GO';
             evalResult.summary = "Emergency humanitarian relief targeting or domestic-only national NGO call, outside Agri Experience's Sub-Saharan African institutional consulting scope.";
+        }
+
+        // CALIBRATION 1G: Physical Goods, Seeds & Equipment Supply Capper
+        // Agri Experience Ltd is an advisory consulting firm, NOT a physical seed vendor or commodity merchant.
+        // Cap pure physical supply procurements at <= 20% NO-GO unless an explicit consulting, advisory, or study scope exists.
+        const combinedSupplyText = `${item.title} ${item.description || ''} ${evalResult.summary || ''}`.toLowerCase();
+        const isPhysicalSupply = /\b(?:invitation\s+for\s+bids|ifb|supply\s+and\s+delivery\s+of|supply\s+of\s+(?:crop\s+)?seeds?|supply\s+of\s+seedlings?|procurement\s+of\s+(?:crop\s+)?seeds?|procurement\s+of\s+seedlings?|purchase\s+of\s+seeds?|delivery\s+of\s+seeds?|supply\s+of\s+fertilizer|procurement\s+of\s+fertilizer|supply\s+of\s+laboratory\s+equipment|supply\s+of\s+tractors?|supply\s+of\s+motor\s+vehicles?|supply\s+of\s+office\s+furniture|homestead\s+garden[-_\s]+crop\s+seeds)\b/i.test(combinedSupplyText);
+        const hasConsultingOrAdvisoryScope = /\b(?:consultan|advisory|technical\s+assistance|baseline\s+study|feasibility|scoping|evaluation|mel|policy|capacity\s+building|training\s+of\s+trainers|strategy|framework|development\s+of\s+digital)\b/i.test(combinedSupplyText);
+        if (isPhysicalSupply && !hasConsultingOrAdvisoryScope) {
+            Logger.log(`[Physical Supply Guard] Capping physical goods/commodity procurement: "${item.title}"`);
+            evalResult.score = Math.min(evalResult.score || 0, 20);
+            evalResult.goNoGo = 'NO-GO';
+            evalResult.businessFit = 'LOW';
+            evalResult.pillar = 'N/A - Outside Core Focus';
+            evalResult.summary = `${evalResult.summary || ''} (Pure physical goods supply/delivery lacking consulting or advisory scope; outside firm consulting practice.)`.trim();
+        }
+
+        // CALIBRATION 1H: Urban Municipal Planning & Non-Agricultural Policy Filter
+        const isUrbanOrMunicipalOnly = /\b(?:inclusive\s+cities|smart\s+cities\s+charter|urban\s+planning|municipal\s+charter|cities\s+report|urban\s+settlements?|housing\s+and\s+urban|urban\s+transport)\b/i.test(combinedSupplyText) &&
+            !/\b(?:seed|crop|farming|agriculture|agri|farm|food\s+security|horticulture|agtech|agritech)\b/i.test(combinedSupplyText);
+        if (isUrbanOrMunicipalOnly) {
+            Logger.log(`[Urban/Municipal Filter] Filtered non-agricultural municipal planning tender: "${item.title}"`);
+            evalResult.score = Math.min(evalResult.score || 0, 15);
+            evalResult.goNoGo = 'NO-GO';
+            evalResult.businessFit = 'NONE';
+            evalResult.pillar = 'N/A - Outside Core Focus';
+        }
+
+        // CALIBRATION 1I: Non-Agricultural Supplier Prequalification Guard
+        const isPrequalificationNotice = /\b(?:supplier\s+prequalification|prequalification\s+of\s+suppliers?|vendor\s+prequalification)\b/i.test(item.title);
+        const hasExplicitAgriContext = /\b(seed|variety|crop|farming|agriculture|agri|agtech|agritech|fertilizer|horticulture)\b/i.test(`${item.title} ${item.link} ${item.description || ''}`);
+        if (isPrequalificationNotice && !hasExplicitAgriContext) {
+            Logger.log(`[Prequalification Guard] Filtered non-agricultural supplier prequalification: "${item.title}"`);
+            evalResult.score = Math.min(evalResult.score || 0, 20);
+            evalResult.goNoGo = 'NO-GO';
+            evalResult.businessFit = 'NONE';
+            evalResult.pillar = 'N/A - Outside Core Focus';
         }
 
         const isProcurementScope = /\b(EOI|Expression of Interest|RFP|RFQ|RFCN|Consultanc[a-z]*|Advisor|Expert|Tender|Call for Proposals|Call for Concept Notes|Request for Concept Notes|Terms of Reference|ToR|Grant|Challenge Fund|Innovation Fund|Horizon Europe|Call for|Funding Opportunity|Research Call|Innovation Call|Roster|Adjunct Scientist|Fellowship|Breeder|Geneticist)\b/i.test(`${item.title} ${item.description || ''}`);
@@ -3924,9 +3943,11 @@ function evaluateRfpSingleCallWithGemini(batchItems) {
 
     Target Firm Profile:
 
-    Firm: Agri Experience Ltd (headquartered in Nairobi, Kenya, serving Sub-Saharan Africa across 21+ countries) — expert consulting practice in crop SEED SYSTEMS, AGTECH (including Agritech, Agri-tech, Agri tech), DIGITAL EXTENSION, and AGRICULTURAL POLICY across Sub-Saharan Africa.
+    Firm: Agri Experience Ltd (headquartered in Nairobi, Kenya, serving Sub-Saharan Africa across 21+ countries) — EXPERT MANAGEMENT & TECHNICAL ADVISORY CONSULTING PRACTICE in crop SEED SYSTEMS, AGTECH (including Agritech, Agri-tech, Agri tech), DIGITAL EXTENSION, and AGRICULTURAL POLICY across Sub-Saharan Africa.
 
-    (Note: "AgTech", "Agritech", "Agri-tech", and "Agri tech" are fully synonymous core focus areas).
+    MANDATORY FIRM PRACTICE BOUNDARY:
+    Agri Experience Ltd is a PROFESSIONAL ADVISORY & STRATEGY CONSULTING FIRM. It provides policy advisory, seed sector assessments, regulatory frameworks, AgTech/AI extension advisory, and MEL consulting.
+    It is NEVER a commercial seed merchant, seed distributor, fertilizer vendor, farm inputs merchant, or hardware supplier. It does NOT bid on contracts to supply, pack, or deliver physical bags of seeds, seedlings, grain, fertilizers, or machinery.
 
     Core Practice Pillars:
 
@@ -3944,14 +3965,15 @@ function evaluateRfpSingleCallWithGemini(batchItems) {
 
     7. Agribusiness, Youth & Women Entrepreneurship (incubation, business models, agrodealer networks, digital innovation hubs for agripreneurs)
 
-        Fit Rules & Percentage Scoring Rubric:
+    Fit Rules & Percentage Scoring Rubric:
     The AI evaluator MUST compute an objective match percentage (0% to 100%) reflecting Agri Experience's consulting capabilities:
     - 90% - 100% (HIGH Fit | GO): Direct seed systems, seed certification, seed policy/regulation, variety release, biotech & GMO biosafety, national & regional seed trade authorities and regulatory bodies (e.g. STAK, TASTA, AFSTA, KEPHIS, TOSCI, SCCI, TASAI, National Biosafety Authority).
     - 75% - 89% (HIGH Fit | GO): AgTech platforms, AI in agricultural extension and advisory, digital farmer advisory platforms (MbeguChoice), seed verification platforms (M3/RIMI), and scaling AgTech/FinTech solutions for smallholders and agrodealers.
     - 60% - 74% (MEDIUM Fit | MAYBE or GO): Agribusiness value chains, input markets, youth/women agribusiness entrepreneurship, agricultural MEL, feasibility studies, digital innovation hubs for agripreneurs, and agricultural data systems.
     - 40% - 59% (MEDIUM/LOW Fit | MAYBE): Broad food systems policy or general environmental/climate studies with indirect agricultural or input relevance.
-    - 20% - 39% (LOW Fit | NO-GO): Physical agricultural goods or commodity purchase (e.g. bulk grain, tractors, generators, irrigation hardware) without an advisory/consulting component.
-    - 0% - 19% (NONE Fit | NO-GO): Outside core focus (healthcare, medical/hospital supplies, pharmaceuticals, clinical systems, defense/military, mining, urban commercial IT/software).
+    - 0% - 20% (NONE/LOW Fit | NO-GO): PURE PHYSICAL COMMODITY / INPUTS SUPPLY TENDERS: Solicitations for purchasing, delivering, or supplying physical agricultural goods—including bulk grain, bags of crop seeds, planting seedlings, fertilizers, agrochemicals, tractors, irrigation pipes, or equipment—where the client is looking for a physical goods vendor/distributor rather than a consulting firm to provide advisory services, feasibility studies, or technical assistance.
+      CRITICAL: The presence of the word 'seed' or 'seeds' in an invitation to supply physical crop seeds/seedlings does NOT make it an advisory consulting fit! Pure physical goods supply must receive score <= 20% and NO-GO.
+    - 0% - 19% (NONE Fit | NO-GO): Outside core focus (urban municipal planning, city charters, housing, healthcare, medical/hospital supplies, pharmaceuticals, clinical systems, defense/military, mining, urban commercial IT/software).
 
     Evaluate the following candidates:
 
@@ -3965,7 +3987,13 @@ function evaluateRfpSingleCallWithGemini(batchItems) {
 
        Accept: RFPs, RFQs, EOIs/Expressions of Interest, tenders, consultancy solicitations, competitive calls for proposals (CFPs), calls for concept notes (CFCNs), competitive donor/foundation grants, matching grants, challenge funds, or innovation fund applications.
 
-              AFRICAN DEVELOPMENT BANK (AfDB) & OFFICIAL PORTAL EOI NOTICES:
+       CRITICAL ANTI-HALLUCINATION & FACTUAL GROUNDING MANDATE:
+       - Extract facts STRICTLY from the provided Title, URL, and Context.
+       - NEVER fabricate, invent, or assume the issuing client, authority, or company name if not explicitly written in the provided text. (For example, if a title is 'Supplier Prequalification Notice 2027-2030 - Tenderyetu.com', NEVER assume or state that it is issued by 'Kenya Seed Company Limited'). If the issuer is not mentioned in the text, summarize the scope factually or state the client as 'Not Specified'.
+       - NEVER hallucinate an agricultural or seed systems scope for non-agricultural tenders (e.g. refugee education, municipal planning) merely because they mention an African country where Agri Experience operates.
+       - Salaried employment posts, hiring announcements ('we are hiring', 'we\'re hiring', 'job vacancy') are NOT RFPs/grants. Classify as isGenuineOpportunity: FALSE, isOpen: FALSE, businessFit: 'NONE', score: 0, goNoGo: 'NO-GO'.
+
+       AFRICAN DEVELOPMENT BANK (AfDB) & OFFICIAL PORTAL EOI NOTICES:
        The African Development Bank (afdb.org) publishes official Expressions of Interest and Consultancy RFPs under URLs containing '/documents/eoi-' or '/consultants/eoi-'. Solicitations titled with 'EOI', 'Expression of Interest', 'Consultancy Services', or 'Consulting Firm' on afdb.org are GENUINE, OFFICIAL PROCUREMENT OPPORTUNITIES (isGenuineOpportunity: TRUE).
        Do NOT mislabel them as institutional document pages or generic repositories. Summarize the actual consultancy scope (e.g. advisory services, capacity building, startup acceleration) from the title and context.
 
@@ -3982,18 +4010,22 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
    MUST be classified as:
    businessFit: "NONE", score: 0, goNoGo: "NO-GO".
 
-MANDATORY FILTER: HACKATHONS, DEVELOPER COMPETITIONS & PRIZE CHALLENGES:
-       Agri Experience Ltd is an established corporate consulting firm that pursues institutional RFPs, tenders, and organizational grants, NOT developer coding hackathons or student prize contests.
-       Competitions targeting individual developers, students, or coder teams to build tools for prizes (e.g. "Agentic Africa Challenge", "AgriTech Hackathon", "Developer Challenge", "Coding Competition", teams of 1-3 members, cash prizes to 1st/2nd/3rd place, conference passes):
+       MANDATORY FILTER: HACKATHONS, YOUTH PITCH CONTESTS & CASH PRIZE COMPETITIONS:
+       Agri Experience Ltd is an established corporate consulting firm that pursues institutional RFPs, tenders, and organizational grants, NOT developer coding hackathons, startup pitch competitions, or youth prize contests.
+       Competitions or challenges targeting individual youth, students, startups, or developer teams offering cash prizes, prize money, startup awards, or mentorship (e.g. "Youth in Agribusiness Innovation Contest", "AgriTech Hackathon", "Developer Challenge", "Coding Competition", cash prizes to winners, conference passes):
        MUST be classified as:
        isGenuineOpportunity: FALSE, isOpen: FALSE, businessFit: "NONE", score: 0, goNoGo: "NO-GO",
-       with summary stating: "Developer hackathon / coding challenge or prize competition for individual coders/teams, not an institutional consultancy procurement tender or development grant."
+       with summary stating: "Startup pitch competition / innovation contest or cash prize challenge for individuals/startups, not an institutional consultancy procurement tender or development grant."
 
        MANDATORY FILTER: INDIVIDUAL CONSULTANCIES (FIRM PROPOSALS ONLY):
        Agri Experience Ltd is a consulting firm that pursues institutional RFPs, consortia, and firm contracts, NOT single freelance individual assignments.
        Solicitations explicitly targeting an "Individual Consultant", "Individual Contractor", "Individual Specialist", "Personal Consultancy", "National Consultant" (individual level), or "Consultant Individuel" MUST be classified as:
        isGenuineOpportunity: FALSE, isOpen: FALSE, businessFit: "NONE", score: 0, goNoGo: "NO-GO",
        with summary stating: "Individual consultancy assignment reserved for single freelance individuals, not consulting firms/organizations."
+
+       MANDATORY FILTER: URBAN & MUNICIPAL NON-AGRICULTURAL PLANNING:
+       Tenders for urban municipal planning, city charters (e.g. Inclusive Cities Charter), urban housing, transport, or metropolitan governance that do not have a direct crop seed systems or smallholder agriculture focus MUST be classified as:
+       businessFit: "NONE", score: 0-19, goNoGo: "NO-GO", pillar: "N/A - Outside Core Focus".
 
        Do NOT mark a candidate false merely because it is a grant, matching grant, challenge fund, or call for proposals rather than a commercial procurement tender.
 
@@ -4156,7 +4188,7 @@ MANDATORY FILTER: HACKATHONS, DEVELOPER COMPETITIONS & PRIZE CHALLENGES:
 let _geminiWorkingModelIndex = 0;
 function runWithGeminiModelChain(apiKey, attemptFn, contextLabel) {
     const configured = (CONFIG.GEMINI_MODEL_FALLBACK_CHAIN || []).slice();
-    const fallback = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.8-flash'];
+    const fallback = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.5-flash-lite'];
     const modelChain = configured.length ? configured : fallback;
     const maxAttempts = Math.min(modelChain.length, Number(CONFIG.GEMINI_MAX_MODEL_ATTEMPTS || modelChain.length));
     const label = contextLabel ? ` ${contextLabel}` : '';
@@ -4483,8 +4515,10 @@ function looksLikeNonListingBoilerplate(title, link, listingPageUrl, description
     if (NON_LISTING_TITLE_PATTERNS.some(re => re.test(trimmedTitle))) return true;
     if (listingPageUrl && stripQueryAndHash(link) === stripQueryAndHash(listingPageUrl)) return true;
     if (link) {
-        // Exclude general social media posts (Instagram, TikTok, YouTube, Threads)
+        // Exclude salaried employment recruitment / job vacancies across all sources
+        if (/(?:were[\s_-]?hiring|we[\s_-]?are[\s_-]?hiring|job[\s_-]?vacanc(?:y|ies)|staff[\s_-]?recruitment|employment[\s_-]?opportunit|career[\s_-]?opportunit|recruitment[\s_-]?(?:notice|alert|of)|hiring[\s_-]?(?:now|for|alert|in))/i.test(link)) return true;
 
+        // Exclude general social media posts (Instagram, TikTok, YouTube, Threads)
         if (/https?:\/\/(?:www\.)?(?:instagram|youtube|tiktok|threads)\.(?:com|net)\b/i.test(link)) return true;
 
         // Facebook Handling: Allow public procurement posts, photos, stories, permalinks; block generic home, login, directory, personal profile roots
@@ -4597,6 +4631,13 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
         return;
     }
 
+    const refCode = extractProcurementRefCode(link, rawTitle);
+    if (refCode && existingLinks.refCodes && existingLinks.refCodes.has(refCode)) {
+        if (feedStats) feedStats.duplicate++;
+
+        return;
+    }
+
     if (excludeLinkPatterns && excludeLinkPatterns.some(re => re.test(link))) {
         if (feedStats) { feedStats.filtered++; feedStats.preAiRejected++; }
 
@@ -4621,7 +4662,8 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
             if (feedStats) { feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
             return;
         }
-        const isSocialNoise = /\b(?:project\s+staff\s+recruitment|recruitment\s+of\s+staff|internal\s+vacancy|job\s+vacanc(?:y|ies)|staff\s+recruitment|hiring\s+for|we\s+are\s+hiring|job\s+alert|brics\s+backing|standards\s+organisation\s+of\s+nigeria\s+-\s+son)\b/i.test(combinedText);
+        const isSocialNoise = /\b(?:project\s+staff\s+recruitment|recruitment\s+of\s+staff|internal\s+vacancy|job\s+vacanc(?:y|ies)|staff\s+recruitment|hiring\s+for|hiring\s+in|we\s+are\s+hiring|we're\s+hiring|were[\s_-]?hiring|hiring[\s_-]?(?:now|alert|notice)|salaried\s+position|job\s+alert|brics\s+backing|standards\s+organisation\s+of\s+nigeria\s+-\s+son)\b/i.test(combinedText) ||
+            /(?:were[\s_-]?hiring|we[\s_-]?are[\s_-]?hiring)/i.test(link);
         if (isSocialNoise) {
             if (feedStats) { feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
             return;
@@ -4693,6 +4735,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
     existingLinks.add(link);
     existingLinks.add(cleanLink);
     existingTitleKeys.add(titleKey);
+    if (refCode && existingLinks.refCodes) existingLinks.refCodes.add(refCode);
     bucket.push({ source: sourceName, title, link, description });
     if (feedStats) feedStats.accepted++;
 }
@@ -5222,6 +5265,13 @@ function canonicalizeUrl(url) {
  * (Call for EOI, Request for Proposals, Terms of Reference, etc.) so syndicated
  * tenders across multiple portals match the same underlying opportunity.
  */
+
+function extractProcurementRefCode(link, title) {
+    const text = `${link || ''} ${title || ''}`;
+    // Matches PRQ20251314, RFP-PRQ20251314, OP00474383, auction-461015, FAOTZ/RFP/2026/009, etc.
+    const match = text.match(/\b(?:rfp[-_]?|rfq[-_]?)?(prq[-_]?\d{6,}|op\d{7,}|auction[-_]?\d{5,}|[a-z]{3,6}\/rfp\/\d{4}\/\d+)\b/i);
+    return match ? match[1].toLowerCase().replace(/[-_]/g, '') : null;
+}
 
 function normalizeTitleKey(title) {
     let clean = String(title || '').toLowerCase();
@@ -6013,7 +6063,8 @@ function getExistingLinksAndTitleKeys(sheet) {
     const lastRow = sheet.getLastRow();
     const links = new Set();
     const titleKeys = new Set();
-    if (lastRow < 2) return { links, titleKeys };
+    const refCodes = new Set();
+    if (lastRow < 2) return { links, titleKeys, refCodes };
     const startRow = Math.max(2, lastRow - CONFIG.EXISTING_ROWS_LOOKBACK + 1);
     const numRows = lastRow - startRow + 1;
     const values = sheet.getRange(startRow, 3, numRows, 2).getValues();
@@ -6030,8 +6081,10 @@ function getExistingLinksAndTitleKeys(sheet) {
         }
 
         if (title) titleKeys.add(normalizeTitleKey(title));
+        const refCode = extractProcurementRefCode(link, title);
+        if (refCode) refCodes.add(refCode);
     });
-    return { links, titleKeys };
+    return { links, titleKeys, refCodes };
 }
 
 function evaluateWithFreeProvider(batchItems, basePrompt) {
