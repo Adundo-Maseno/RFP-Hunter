@@ -1,11 +1,30 @@
 /**
  * ==============================================================================
- * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.22 (ENTERPRISE PRODUCTION EDITION)
+ * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.23 (ENTERPRISE PRODUCTION EDITION)
  * ==============================================================================
  *
  * FIRM PROFILE: Agri Experience Ltd (Nairobi, Kenya)
  * Primary Focus: Seed Systems, AgTech, Policy & Regulatory Advisory, and Agricultural
  * Transformation across 21+ Sub-Saharan African Countries.
+ *
+ * MAJOR ENHANCEMENTS & BUG FIXES IN VERSION 5.23:
+ *  1. WORD-BOUNDARY SEED KEYWORD GUARD (CRITICAL FIX):
+ *     - Enforces strict token boundary matching (?:^|[^a-zA-Z0-9_]) for CORE_SEED_KEYWORDS.
+ *     - Eliminates critical pre-AI filter bypasses where short seed acronyms (rimi, dus, vin, stak, ista)
+ *       falsely matched inside non-agri words like "cybercriminalité", "industry", "province", and "mistake".
+ *  2. HARDENED NON-AGRI SECTOR & IT HARDWARE REGEX:
+ *     - Expanded NON_AGRI_CIVIL_WORKS_REGEX to discard generic IT hardware tenders (Dell, Lenovo, HP,
+ *       laptops, servers, switches, SSL certificates, photocopiers), corporate travel/insurance audits,
+ *       deep-sea fishing tools, livestock purchasing, gender-based violence (VBG/GBV), and French road works.
+ *  3. MULTI-VARIANT GENERAL PROCUREMENT NOTICE (GPN) SUPPRESSION:
+ *     - Broadened NON_LISTING_TITLE_PATTERNS to suppress all GPN / SPN variants lacking specific tender scopes.
+ *  4. BARE MINISTRY MASTHEAD RESOLVER:
+ *     - Added generic ministry and department mastheads ("MINISTRY OF AGRICULTURE", "DEPARTMENT OF...")
+ *       to isBareGovernmentOrGenericTitle so bare headers without a consultancy title are suppressed.
+ *  5. MULTI-DONOR PROCUREMENT REFERENCE EXTRACTOR:
+ *     - Expanded extractProcurementRefCode to parse RFP/AGRA/..., WB-P..., CI-PADCI-..., GCP/..., and ITB/... codes.
+ *  6. HIT COUNTING INTEGRITY:
+ *     - Upgraded countDistinctKeywordHits to apply token boundaries across all keywords, preventing inflated scores.
  *
  * MAJOR ENHANCEMENTS IN VERSION 5.22:
  *  1. SAIGE AFRICA OPPORTUNITY HUB DEDICATED SCRAPER & DEEP-LINK RESOLVER:
@@ -4847,8 +4866,8 @@ function isBareGovernmentOrGenericTitle(title) {
     if (!title) return true;
     const clean = String(title).trim().replace(/^[\s\(\[\{]+|[\s\)\]\}]+$/g, '');
     const GENERIC_TITLE_PATTERNS = [
-        // Bare country or government mastheads
-        /^(?:the\s+)?(?:republic|government|state|kingdom|federation)\s+of\s+[a-z\s]+$/i,
+        // Bare country, government, or ministry mastheads
+        /^(?:the\s+)?(?:republic|government|state|kingdom|federation|ministry|department|secretariat)\s+of\s+[a-z\s]+$/i,
         /^(?:republic\s+of\s+kenya|government\s+of\s+kenya|kenya)$/i,
         /^(?:republic\s+of\s+rwanda|government\s+of\s+rwanda|rwanda)$/i,
         /^(?:republic\s+of\s+uganda|government\s+of\s+uganda|uganda)$/i,
@@ -4905,12 +4924,11 @@ const NON_LISTING_TITLE_PATTERNS = [
     /^jobs$/i,
     /^.*jobs\s*in\s*uganda$/i,
     // Generic notice headings lacking tender context
-
-    /^specific procurement notice$/i,
-    /^general procurement notice$/i,
-    /^procurement notice$/i,
-    /^project-related procurement$/i,
-    /^project procurement$/i,
+    /^(?:general|specific)?\s*procurement\s+notices?(?:\s*\([a-z0-9\s]+\))?$/i,
+    /^gpn(?:\s*[-–—:].*)?$/i,
+    /^procurement\s+notice(?:\s*\([a-z0-9\s]+\))?$/i,
+    /^project-related\s+procurement$/i,
+    /^project\s+procurement$/i,
     /^procurement\s+(?:opportunities|notices|documents?)$/i,
     // Conferences, summits, symposiums, webinars, workshops, competitions, calendars, team building
 
@@ -5119,9 +5137,9 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
 
     // Pre-AI negative filter: discard obvious civil works, railway, municipal hardware, curriculum, medical supplies, and non-agri sectors lacking seed/crop context
 
-    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban|cybercriminalité|cybersecurity|cyber-security|cyber\s+security|réalité\s+augmentée|augmented\s+reality|virtual\s+reality|réalité\s+virtuelle|software\s+development|développement\s+logiciel|data\s+centre|data\s+center|réseau\s+informatique|csu\s+equipment|equipamento\s+necessario\s+para\s+o\s+csu|computer\s+lab|fibre\s+optic|cloud\s+computing|data\s+science\s+curriculum)\b/i;
+    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|travaux\s+routiers?|axe\s+routier|route\s+rev[eê]tue|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban|cybercriminalité|cybersecurity|cyber-security|cyber\s+security|réalité\s+augmentée|augmented\s+reality|virtual\s+reality|réalité\s+virtuelle|software\s+development|développement\s+logiciel|data\s+centre|data\s+center|réseau\s+informatique|csu\s+equipment|equipamento\s+necessario\s+para\s+o\s+csu|computer\s+lab|fibre\s+optic|cloud\s+computing|data\s+science\s+curriculum|dell|lenovo|hp\s+laptops?|tablets?\s+and\s+laptops?|laptops?\s+and\s+tablets?|ssl\s+certificates?|procurement\s+of\s+servers?|server\s+hardware|network\s+switches|photocopiers?|toner\s+cartridges?|office\s+stationery|office\s+furniture|violences?\s+basées?\s+sur\s+le\s+genre|gender[-_\s]+based\s+violence|\bvbg\b|\bgbv\b|travel\s+audit|credit\s+life\s+policy|insurance\s+premiums|claims\s+administration|équipements?\s+de\s+p[eê]che|matériel\s+de\s+p[eê]che|outils\s+et\s+d\'équipements?\s+de\s+p[eê]che|marine\s+fisheries|marine\s+fishing|deep[-_\s]sea\s+fisheries|breeding\s+(?:sheep|goats|cattle|pigs|chickens|poultry)|petits\s+ruminants|poussins|alevins|aliments?\s+bétail)\b/i;
     if (NON_AGRI_CIVIL_WORKS_REGEX.test(combinedText)) {
-        const hasSeedOrCrop = CORE_SEED_KEYWORDS.some(k => combinedText.includes(k.toLowerCase())) || /\b(seed|variety|breeder|germplasm|crop|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|gmo|biosafety|biotech|transgenic|agtech|agritech|agri[-\s]?tech)s?\b/i.test(combinedText);
+        const hasSeedOrCrop = CORE_SEED_KEYWORDS.some(k => new RegExp('(?:^|[^a-zA-Z0-9_])' + escapeRegex(k) + '(?:$|[^a-zA-Z0-9_])', 'i').test(combinedText)) || /\b(seed|variety|breeder|germplasm|crop|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|gmo|biosafety|biotech|transgenic|agtech|agritech|agri[-\s]?tech)s?\b/i.test(combinedText);
         if (!hasSeedOrCrop) {
             if (feedStats) { feedStats.lowRelevance++; feedStats.filtered++; feedStats.preAiRejected++; }
 
@@ -5717,8 +5735,8 @@ function canonicalizeUrl(url) {
 
 function extractProcurementRefCode(link, title) {
     const text = `${link || ''} ${title || ''}`;
-    // Matches PRQ20251314, RFP-PRQ20251314, OP00474383, auction-461015, FAOTZ/RFP/2026/009, etc.
-    const match = text.match(/\b(?:rfp[-_]?|rfq[-_]?)?(prq[-_]?\d{6,}|op\d{7,}|auction[-_]?\d{5,}|[a-z]{3,6}\/rfp\/\d{4}\/\d+)\b/i);
+    // Matches PRQ20251314, RFP-PRQ20251314, OP00474383, auction-461015, FAOTZ/RFP/2026/009, RFP/AGRA/..., CI-PADCI-..., etc.
+    const match = text.match(/\b(?:rfp[-_]?|rfq[-_]?)?(prq[-_]?\d{6,}|op\d{7,}|auction[-_]?\d{5,}|[a-z0-9]{2,10}\/(?:rfp|rfq|itb|eoi)\/[a-z0-9\/_-]+|(?:rfp|rfq|itb|eoi)\/[a-z0-9\/_-]{4,30}|[a-z]{2,5}-[a-z]{2,10}-\d{5,}-[a-z0-9_-]+|wb-p\d{6,}[a-z0-9\/-]*|gcp\/[a-z]{3}\/\d{3}\/[a-z]{3})\b/i);
     return match ? match[1].toLowerCase().replace(/[-_]/g, '') : null;
 }
 
@@ -6513,11 +6531,7 @@ function isAgriRelated(text) {
 
 function countDistinctKeywordHits(lower, keywords) {
     const matched = keywords.filter(kw => {
-        if (kw.length <= 3) {
-            return new RegExp('\\b' + escapeRegex(kw) + '\\b', 'i').test(lower);
-        }
-
-        return lower.includes(kw);
+        return new RegExp('(?:^|[^a-zA-Z0-9_])' + escapeRegex(kw) + '(?:$|[^a-zA-Z0-9_])', 'i').test(lower);
     });
     if (matched.length <= 1) return matched.length;
     matched.sort((a, b) => b.length - a.length);
