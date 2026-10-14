@@ -1,15 +1,53 @@
 /**
  * ==============================================================================
- * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.18 (ENTERPRISE PRODUCTION EDITION)
+ * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.22 (ENTERPRISE PRODUCTION EDITION)
  * ==============================================================================
  *
  * FIRM PROFILE: Agri Experience Ltd (Nairobi, Kenya)
  * Primary Focus: Seed Systems, AgTech, Policy & Regulatory Advisory, and Agricultural
  * Transformation across 21+ Sub-Saharan African Countries.
  *
- * MAJOR ENHANCEMENTS IN VERSION 5.18:
- *  1. GROUNDED FIRM PROFILE & ANTI-HALLUCINATION GUARDRAILS:
- *     - Explicit consulting practice boundary grounding: Agri Experience Ltd is strictly
+ * MAJOR ENHANCEMENTS IN VERSION 5.22:
+ *  1. SAIGE AFRICA OPPORTUNITY HUB DEDICATED SCRAPER & DEEP-LINK RESOLVER:
+ *     - Direct Next.js RSC & HTML opportunity card parser for saigeopportunity.org.
+ *     - Replaces generic directory/filter URLs (e.g. /opportunities?family=funding) with direct,
+ *       actionable opportunity links (/opportunities/[slug]) across grants, seed tenders, RFQs,
+ *       agribusiness accelerators, and continental agriculture programs (CAADP).
+ *  2. SAIGE CATALOG & DIRECTORY BOILERPLATE GUARD:
+ *     - Suppresses top-level directory root URLs (/opportunities, /opportunities?family=..., /directory, /map)
+ *       and catalog titles ("Funding for businesses - SAIGE Opportunity") in pre-AI filters so generic aggregators
+ *       are never logged as single RFPs.
+ *
+ * MAJOR ENHANCEMENTS IN VERSION 5.21:
+ *  1. PRE-AI IT & SOFTWARE CURRICULUM LEAK SUPPRESSION (P1):
+ *     - Expanded NON_AGRI_CIVIL_WORKS_REGEX with generic IT hardware, cybersecurity,
+ *       university computer science curriculum, VR/AR, and software development terms.
+ *     - Discards non-agri donor digital infrastructure/curriculum tenders pre-AI,
+ *       saving 100% of Gemini AI evaluation calls and tokens on generic multilateral tech grants.
+ *
+ *  2. PERSISTENT DEAD-KEY BLACKLISTING (P2):
+ *     - In fetchRenderedHtml, keys returning HTTP 401 (Unauthorized/Expired) are cached in
+ *       CacheService with a 24-hour TTL (DEAD_RENDER_KEY_...).
+ *     - Subsequent runs bypass dead render keys in 0.0ms, saving 30+ seconds of wait latency.
+ *
+ *  3. STAGNANT PORTAL AUTO-PIVOT (P3):
+ *     - If 100% of notices parsed from a legacy portal table (e.g. ILRI Drupal) are expired,
+ *       the engine automatically pivots to a Google Serper portal search, ensuring fresh
+ *       solicitations indexed elsewhere across the domain are captured.
+ *
+ *  4. HIGH-VALUE REGIONAL DONOR EXPANSION (P4):
+ *     - Integrated dedicated discovery queries for TradeMark Africa (TMA), SNV Netherlands
+ *       Development Organisation, and Enabel (Belgian Development Agency).
+ *
+ *  5. ENTERPRISE OBSERVABILITY & AUTOMATED ADMIN ALERTING (P5):
+ *     - Added notifyAdminAlert() with 12-hour throttling to notify administrators via email
+ *       when Serper keys are running low, Gemini quota depletes, or Discovery Guard trips.
+ *
+ *  5. BARE GOVERNMENT MASTHEAD & UNINFORMATIVE TITLE RESOLVER (v5.19):
+ *     - Pre-AI boilerplate guard: Suppresses bare country/state mastheads (e.g. "REPUBLIC OF KENYA",
+ *       "GOVERNMENT OF RWANDA") and generic directory URLs lacking explicit tender context.
+ *     - Intelligent single-tender AI title extraction: Mandates that the AI evaluator extract a
+ *       substantive, professional opportunity title (combining issuing authority + assignment scope).
  *       a management and technical advisory consulting firm, never a physical seed vendor
  *       or commodity merchant.
  *     - Anti-hallucination mandate in AI base prompt: Strictly forbids fabricating issuing
@@ -17,24 +55,24 @@
  *     - Evaluator model chain prioritized to gemini-3.8-flash and gemini-3.5-flash ahead of
  *       flash-lite to ensure high semantic fidelity and zero entity hallucinations.
  *
- *  2. DETERMINISTIC PHYSICAL COMMODITY & SEED SUPPLY CAPPER:
+ *  3. DETERMINISTIC PHYSICAL COMMODITY & SEED SUPPLY CAPPER:
  *     - Hard code guard (Calibration 1G) capping tenders for purchasing or supplying physical
  *       goods (crop seeds, seedlings, grain, fertilizer, tractors, equipment) at <= 20% NO-GO
  *       and routing to Filtered Out unless explicit consulting/advisory scope exists.
  *
- *  3. SALARIED RECRUITMENT & JOB VACANCY PRE-AI SUPPRESSION:
+ *  4. SALARIED RECRUITMENT & JOB VACANCY PRE-AI SUPPRESSION:
  *     - Universal URL slug and text regex detecting employee hiring notices ("were-hiring",
  *       "we-are-hiring", "job-vacancy", "staff-recruitment"), dropping them pre-AI.
  *
- *  4. YOUTH PITCH CONTEST & CASH PRIZE CHALLENGE FILTRATION:
+ *  5. YOUTH PITCH CONTEST & CASH PRIZE CHALLENGE FILTRATION:
  *     - Expanded hackathon and competition filters to suppress youth entrepreneurship
  *       competitions offering cash prizes and mentorship, keeping the list firm-level.
  *
- *  5. URBAN MUNICIPAL PLANNING & NON-AGRI POLICY FILTER:
+ *  6. URBAN MUNICIPAL PLANNING & NON-AGRI POLICY FILTER:
  *     - Hard guard (Calibration 1H) dropping urban planning, city charters, and municipal
  *       governance tenders lacking core crop/seed/agriculture scope.
  *
- *  6. PROCUREMENT REFERENCE CODE DEDUPLICATION:
+ *  7. PROCUREMENT REFERENCE CODE DEDUPLICATION:
  *     - Automatically extracts unique procurement codes (e.g. PRQ20251314, OP00474383) across
  *       web URLs and syndicated PDF documents for O(1) cross-format duplicate rejection.
  *
@@ -251,6 +289,162 @@ const CONFIG = {
         'seedling'
     ],
     FEEDS: [
+        // =========================================================================
+        // TIER 1: LIGHTNING-FAST INSTITUTIONAL & REGIONAL APIS (~15s CUMULATIVE)
+        // High yield, structured JSON/REST endpoints, 100% African focus
+        // =========================================================================
+        {
+            name: 'TenderSure Africa Open Bids',
+            url: 'https://website-api.tendersure.africa/api/v1/core/open-bids/?page=1&page_size=25',
+            type: 'TENDERSURE_API',
+            baseUrl: 'https://www.tendersure.africa',
+            enabled: true,
+            assumeAfrican: true
+        },
+        {
+            name: 'AGRA Procurement Portal',
+            type: 'AGRA_ORACLE_API',
+            enabled: true,
+            url: "https://ekjd.fa.em2.oraclecloud.com/fscmRestApi/rest/rv:ef9d2217-db96-4c96-ab8a-675ac58d8811/en/11.13.18.05:9/supplierNegotiationAbstracts?finder=RowFinderByBU%3BProcurementBUId%3D300000001758758&orderBy=PostingDate%3Adesc&q=NegotiationStatusCode%20%3D%20%27ACTIVE%27&fields=AttachmentsCount%2CAuctionHeaderId%2CBuyerName%2CCloseDate%2CNegotiation%2CNegotiationStatus%2CNegotiationStatusCode%2CNegotiationTitle%2CNegotiationType%2COpenDate%2CPostingDate%2CPreviewDate%2CProcurementBUId%2CProcurementBUName%2CPublishDate%2CSynopsis%2CTimeRemaining%2CTimeRemainingOrder&limit=25&offset=0",
+            abstractListingPageUrl: "https://ekjd.fa.em2.oraclecloud.com/fscmUI/redwood/negotiation-abstracts/view/abstractlisting?prcBuId=300000001758758"
+        },
+        {
+            name: 'AGRA Opportunities & Concept Notes',
+            type: 'AGRA_OPPORTUNITIES_API',
+            url: 'https://agra.org/wp-json/wp/v2/opportunity?per_page=100',
+            baseUrl: 'https://agra.org',
+            enabled: true,
+            assumeAfrican: true
+        },
+        {
+            name: 'CIMMYT Opportunities & Consultancies (CGIAR)',
+            type: 'CIMMYT_OPPORTUNITIES_API',
+            url: 'https://apply.workable.com/api/v1/widget/accounts/577052',
+            webUrl: 'https://www.cimmyt.org/careers/',
+            baseUrl: 'https://www.cimmyt.org',
+            enabled: true,
+            assumeAfrican: false
+        },
+        {
+            name: 'AATF Tenders & EOIs',
+            type: 'AATF_TENDERS_SCRAPER',
+            url: 'https://www.aatf-africa.org/tenders/',
+            baseUrl: 'https://www.aatf-africa.org',
+            enabled: true,
+            assumeAfrican: true
+        },
+        {
+            name: 'ILRI Procurement & Tenders (CGIAR)',
+            type: 'ILRI_TENDERS_SCRAPER',
+            url: 'https://www.ilri.org/tenders',
+            baseUrl: 'https://www.ilri.org',
+            enabled: true,
+            assumeAfrican: true
+        },
+        {
+            name: 'FundsforNGOs Grants & Calls for Proposals',
+            type: 'FUNDS_FOR_NGOS_API',
+            baseUrl: 'https://www2.fundsforngos.org',
+            url: 'https://www2.fundsforngos.org/wp-json/wp/v2/posts',
+            enabled: true,
+            assumeAfrican: false,
+            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'agtech', 'biosafety']
+        },
+        {
+            name: 'Global South Opportunities Funding',
+            url: 'https://www.globalsouthopportunities.com/category/funding/feed/',
+            type: 'GLOBAL_SOUTH_OPP_FEED',
+            baseUrl: 'https://www.globalsouthopportunities.com',
+            enabled: true,
+            assumeAfrican: false
+        },
+        {
+            name: 'LocateFund African Funding Opportunities',
+            url: 'https://locatefund.com/opportunities/',
+            type: 'LOCATEFUND_API',
+            baseUrl: 'https://locatefund.com',
+            enabled: true,
+            assumeAfrican: true,
+            searchKeywords: ['agriculture', 'seed', 'agribusiness', 'crops', 'farming', 'grant', 'funding', 'call for proposals', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech', 'agrodealer', 'agro-dealer', 'gmo', 'biosafety']
+        },
+        {
+            name: 'SAIGE Africa Opportunity Platform',
+            url: 'https://saigeopportunity.org/opportunities',
+            marketUrl: 'https://saigeopportunity.org/opportunities?family=market',
+            baseUrl: 'https://saigeopportunity.org',
+            type: 'SAIGE_OPPORTUNITIES_SCRAPER',
+            enabled: true,
+            assumeAfrican: true
+        },
+
+        // =========================================================================
+        // TIER 2: MULTILATERAL AGENCIES & STRUCTURED PROCUREMENT HUBS (~100s)
+        // Global and continental databases with official solicitation pipelines
+        // =========================================================================
+        { name: 'AfDB Requests for EOI', url: 'https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/request-for-expression-of-interest', type: 'RENDERED_BLOCK_SCRAPER', baseUrl: 'https://www.afdb.org', enabled: true, assumeAfrican: true },
+        {
+            name: 'IFAD Project Procurement Opportunities',
+            url: 'https://www.ifad.org/en/project-procurement/opportunities',
+            type: 'IFAD_PROJECT_PROCUREMENT',
+            baseUrl: 'https://www.ifad.org',
+            enabled: true,
+            pagination: { paramName: 'page', maxPages: 3 },
+            includeNoticeTypes: ['General Procurement Notice', 'Specific Procurement Notice'],
+            excludeNoticeTypes: ['Contract Award Notice']
+        },
+        {
+            name: 'IFAD Calls for Proposals',
+            url: 'https://www.ifad.org/en/call-for-proposals',
+            type: 'IFAD_CALL_FOR_PROPOSALS',
+            baseUrl: 'https://www.ifad.org',
+            enabled: true,
+            pagination: { paramName: 'page', maxPages: 3 }
+        },
+        { name: 'EU TED Search API (Agriculture)', type: 'TED_API', enabled: true },
+        { name: 'World Bank Procurement API (Global)', type: 'WORLD_BANK', enabled: true },
+        {
+            name: 'Africa-Europe Innovation Platform Funding',
+            url: 'https://www.africaeuropeinnovation.net/funding-opportunities/?topic=Food+Systems',
+            type: 'AEIP_SCRAPER',
+            baseUrl: 'https://www.africaeuropeinnovation.net',
+            enabled: true,
+            assumeAfrican: true,
+            pagination: { paramName: 'pg', maxPages: 3 },
+            excludeLinkPatterns: [/\/ip-helpdesk\/?/i, /\/submit-funding-opportunity\/?/i]
+        },
+        {
+            name: 'All Business Africa Tenders',
+            type: 'ALL_BUSINESS_AFRICA_API',
+            url: 'https://allbusiness.africa/api/opportunities',
+            baseUrl: 'https://allbusiness.africa',
+            enabled: true,
+            assumeAfrican: true,
+            maxPages: 2,
+            perPage: 50,
+            searchTerms: ['seed', 'agribusiness', 'seed systems', 'agriculture']
+        },
+        {
+            name: 'UNGM Procurement Opportunities',
+            type: 'UNGM_API',
+            baseUrl: 'https://www.ungm.org',
+            url: 'https://www.ungm.org/Public/Notice',
+            enabled: true,
+            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'farming', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech']
+        },
+        {
+            name: 'UNJobNet Consultancies & EOIs',
+            type: 'UNJOBNET_SCRAPER',
+            baseUrl: 'https://www.unjobnet.org',
+            url: 'https://www.unjobnet.org/jobs',
+            enabled: true,
+            assumeAfrican: false,
+            searchKeywords: ['seed', 'crops', 'agribusiness', 'agriculture', 'food security', 'value chain', 'agtech', 'biosafety']
+        },
+
+        // =========================================================================
+        // TIER 3: OPEN WEB & SOCIAL MEDIA SERPER DISCOVERY (~75s)
+        // Broad targeted queries hunting new solicitations across the web
+        // =========================================================================
         {
             name: 'Google Open Web RFP Search (Serper)',
             type: 'GOOGLE_SEARCH_API',
@@ -277,9 +471,61 @@ const CONFIG = {
                 'site:fao.org/procurement ("seed" OR "agriculture" OR "crops" OR "inputs" OR "agronomy") after:{DATE_FLOOR}',
                 '("Call for Proposals" OR "Grant Opportunity" OR "Challenge Fund" OR "Funding Opportunity") ("seed" OR "agriculture" OR "agronomy" OR "agribusiness" OR "smallholder") ("East Africa" OR "West Africa" OR "Southern Africa" OR Kenya OR Nigeria OR Ghana OR Tanzania OR Uganda OR Ethiopia OR Rwanda) after:{DATE_FLOOR} -jobs -career -vacancy',
                 '("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals") ("agricultural advisory" OR "agritech" OR "agtech" OR "agri-tech" OR "agri tech" OR "digital agriculture" OR "extension services" OR "farmer advisory") (Rwanda OR Kenya OR Tanzania OR Uganda OR Ethiopia OR Nigeria OR Ghana OR Africa) after:{DATE_FLOOR} -jobs -vacancy',
-                '("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference") ("farmer advisory" OR "seed advisory" OR "agtech" OR "agritech" OR "agri-tech" OR "agri tech" OR "digital advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -jobs -vacancy'
+                '("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference") ("farmer advisory" OR "seed advisory" OR "agtech" OR "agritech" OR "agri-tech" OR "agri tech" OR "digital advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -jobs -vacancy',
+                'site:trademarkafrica.com/procurement ("Expression of Interest" OR EOI OR RFP OR Tender OR Consultancy) ("trade" OR "agriculture" OR "inputs" OR "SPS" OR "phytosanitary" OR "seed") after:{DATE_FLOOR}',
+                '(site:snv.org/tenders-and-procurement OR site:enabel.be/public-procurement) ("seed" OR "agriculture" OR "agribusiness" OR "crops" OR "farming") Africa after:{DATE_FLOOR}',
+                '(site:trademarkafrica.com OR site:snv.org OR site:enabel.be) ("Request for Proposals" OR RFP OR "Expression of Interest" OR EOI OR "Call for Proposals" OR Consultancy) ("seed" OR "agriculture" OR "agribusiness" OR "trade") after:{DATE_FLOOR}'
             ]
         },
+        {
+            name: 'LinkedIn Opportunity Search (Serper)',
+            type: 'GOOGLE_SEARCH_API',
+            enabled: true,
+            queryTemplates: [
+                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Consultancy Services" OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("seed systems" OR "seed sector" OR "seed certification" OR "seed quality" OR agrodealer OR "planting materials" OR "seed policy") Africa after:{DATE_FLOOR} -hiring -vacancy -salary',
+                'site:linkedin.com/posts ("AGRA" OR "CGIAR" OR "CIMMYT" OR "IITA" OR "CIAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") (RFP OR EOI OR Consultancy OR "Call for Proposals" OR "Request for Proposals" OR "Terms of Reference" OR "Market Sounding") Africa after:{DATE_FLOOR} -hiring -vacancy',
+                'site:linkedin.com/posts ("TradeMark Africa" OR "TMA" OR "SNV" OR "Enabel") ("seed" OR "agriculture" OR "agribusiness" OR "phytosanitary" OR "SPS" OR "cross-border") (RFP OR EOI OR Consultancy OR "Call for Proposals" OR "Terms of Reference") Africa after:{DATE_FLOOR} -hiring -vacancy',
+                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "Market Sounding") ("digital tools" OR "international trade" OR "trade compliance" OR "paperless trade" OR "supply chain visibility" OR "market intelligence") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
+                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("GMO" OR "genetically modified" OR "biosafety" OR "biotechnology regulation" OR "crop variety release") Africa after:{DATE_FLOOR} -hiring -vacancy -salary',
+                'site:linkedin.com/posts ("Call for Proposals" OR "Call for Applications" OR "Grant Opportunity" OR "EOI" OR "RFP") ("agribusiness" OR "agricultural enterprise" OR "seed enterprise" OR "agro-dealer" OR "youth agribusiness") Africa after:{DATE_FLOOR} -hiring -salary',
+                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("agricultural advisory" OR "agritech" OR "agtech" OR "agri-tech" OR "agri tech" OR "extension services" OR "digital agriculture" OR "farmer advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
+                'site:linkedin.com/posts ("C4IR" OR "MINAGRI" OR "World Economic Forum" OR "Alliance for a Green Revolution" OR "Food Systems") ("agricultural advisory" OR "agriculture" OR "agritech" OR "agtech" OR "agri-tech" OR "agri tech" OR "farmers") ("Expression of Interest" OR EOI OR RFP OR "Call for Proposals") Africa after:{DATE_FLOOR}',
+                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("farmer advisory" OR "seed advisory" OR "agtech" OR "agritech" OR "agri-tech" OR "agri tech" OR "digital advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary'
+            ]
+        },
+        {
+            name: 'Facebook Opportunity Search (Serper)',
+            type: 'GOOGLE_SEARCH_API',
+            enabled: true,
+            queryTemplates: [
+                'site:facebook.com ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "Consultancy Services") ("seed systems" OR "seed sector" OR "seed certification" OR "seed quality" OR agrodealer OR "planting materials" OR "agricultural advisory" OR "agritech" OR "agtech" OR "agri-tech" OR "agri tech" OR "GMO" OR "biosafety") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
+                'site:facebook.com ("AGRA" OR "CGIAR" OR "CIMMYT" OR "IITA" OR "CIAT" OR "AfDB" OR "AATF" OR "CORAF" OR "ASARECA" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV" OR "MINAGRI") (RFP OR EOI OR Consultancy OR "Call for Proposals" OR "Request for Proposals" OR "Tender" OR "Market Sounding") Africa after:{DATE_FLOOR} -hiring -vacancy',
+                'site:facebook.com ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "Market Sounding") ("digital tools" OR "international trade" OR "trade compliance" OR "paperless trade" OR "supply chain visibility" OR "market intelligence") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
+                'site:facebook.com ("Call for Proposals" OR "Call for Applications" OR "Grant Opportunity" OR "EOI" OR "RFP") ("agribusiness" OR "agricultural enterprise" OR "seed enterprise" OR "agro-dealer" OR "youth agribusiness") Africa after:{DATE_FLOOR} -hiring -salary',
+                'site:facebook.com ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference") ("farmer advisory" OR "seed advisory" OR "agtech" OR "agritech" OR "agri-tech" OR "agri tech" OR "digital advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary'
+            ]
+        },
+        {
+            name: 'X (Twitter) Opportunity Search (Serper)',
+            type: 'GOOGLE_SEARCH_API',
+            enabled: true,
+            queryTemplates: [
+                '(site:x.com OR site:twitter.com) ("AGRA" OR "CGIAR" OR "CIMMYT" OR "AATF" OR "AfDB" OR "IITA" OR "CORAF") (RFP OR "Call for Proposals" OR "Request for Proposals" OR EOI OR Consultancy) (seed OR agribusiness OR agriculture) after:{DATE_FLOOR} -hiring -vacancy'
+            ]
+        },
+        {
+            name: 'ASARECA Consultancies & EOIs',
+            type: 'ASARECA_REST_API',
+            url: 'https://www.asareca.org/wp-json/wp/v2/posts?categories=90&per_page=20',
+            baseUrl: 'https://www.asareca.org',
+            enabled: true,
+            assumeAfrican: true,
+            preferSerperFallback: true
+        },
+
+        // =========================================================================
+        // DISABLED / INACTIVE FEEDS
+        // =========================================================================
         {
             name: 'Gemini Grounded Web Search',
             type: 'GEMINI_SEARCH_API',
@@ -296,184 +542,8 @@ const CONFIG = {
                 'at most 8 findings.'
             ]
         },
-        { name: 'World Bank Procurement API (Global)', type: 'WORLD_BANK', enabled: true },
-        { name: 'EU TED Search API (Agriculture)', type: 'TED_API', enabled: true },
-        {
-            name: 'AGRA Procurement Portal',
-            type: 'AGRA_ORACLE_API',
-            enabled: true,
-            url: "https://ekjd.fa.em2.oraclecloud.com/fscmRestApi/rest/rv:ef9d2217-db96-4c96-ab8a-675ac58d8811/en/11.13.18.05:9/supplierNegotiationAbstracts?finder=RowFinderByBU%3BProcurementBUId%3D300000001758758&orderBy=PostingDate%3Adesc&q=NegotiationStatusCode%20%3D%20%27ACTIVE%27&fields=AttachmentsCount%2CAuctionHeaderId%2CBuyerName%2CCloseDate%2CNegotiation%2CNegotiationStatus%2CNegotiationStatusCode%2CNegotiationTitle%2CNegotiationType%2COpenDate%2CPostingDate%2CPreviewDate%2CProcurementBUId%2CProcurementBUName%2CPublishDate%2CSynopsis%2CTimeRemaining%2CTimeRemainingOrder&limit=25&offset=0",
-            abstractListingPageUrl: "https://ekjd.fa.em2.oraclecloud.com/fscmUI/redwood/negotiation-abstracts/view/abstractlisting?prcBuId=300000001758758"
-        },
-        { name: 'AfDB Requests for EOI', url: 'https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/request-for-expression-of-interest', type: 'RENDERED_BLOCK_SCRAPER', baseUrl: 'https://www.afdb.org', enabled: true, assumeAfrican: true },
-        {
-            name: 'IFAD Project Procurement Opportunities',
-            url: 'https://www.ifad.org/en/project-procurement/opportunities',
-            type: 'IFAD_PROJECT_PROCUREMENT',
-            baseUrl: 'https://www.ifad.org',
-            enabled: true,
-            pagination: { paramName: 'page', maxPages: 3 },
-            includeNoticeTypes: ['General Procurement Notice', 'Specific Procurement Notice'],
-            excludeNoticeTypes: ['Contract Award Notice']
-        },
-        {
-            name: 'IFAD Calls for Proposals',
-            url: 'https://www.ifad.org/en/call-for-proposals',
-            type: 'IFAD_CALL_FOR_PROPOSALS',
-            baseUrl: 'https://www.ifad.org',
-            enabled: true,
-            pagination: { paramName: 'page', maxPages: 3 }
-        },
-        {
-            name: 'UNGM Procurement Opportunities',
-            type: 'UNGM_API',
-            baseUrl: 'https://www.ungm.org',
-            url: 'https://www.ungm.org/Public/Notice',
-            enabled: true,
-            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'farming', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech']
-        },
-        {
-            name: 'Africa-Europe Innovation Platform Funding',
-            url: 'https://www.africaeuropeinnovation.net/funding-opportunities/?topic=Food+Systems',
-            type: 'AEIP_SCRAPER',
-            baseUrl: 'https://www.africaeuropeinnovation.net',
-            enabled: true,
-            assumeAfrican: true,
-            pagination: { paramName: 'pg', maxPages: 3 },
-            excludeLinkPatterns: [/\/ip-helpdesk\/?/i, /\/submit-funding-opportunity\/?/i]
-        },
         { name: 'ADB Business Opportunities', url: 'https://www.adb.org/work-with-us/business-opportunities', type: 'BLOCK_SCRAPER', baseUrl: 'https://www.adb.org', enabled: false },
-        { name: 'IADB Procurement Notices', url: 'https://www.iadb.org/en/how-we-can-work-together/procurement/procurement-projects/procurement-notices', type: 'RENDERED_BLOCK_SCRAPER', baseUrl: 'https://www.iadb.org', enabled: false },
-        {
-            name: 'All Business Africa Tenders',
-            type: 'ALL_BUSINESS_AFRICA_API',
-            url: 'https://allbusiness.africa/api/opportunities',
-            baseUrl: 'https://allbusiness.africa',
-            enabled: true,
-            assumeAfrican: true,
-            maxPages: 2,
-            perPage: 50,
-            searchTerms: ['seed', 'agribusiness', 'seed systems', 'agriculture']
-        },
-        {
-            name: 'AGRA Opportunities & Concept Notes',
-            type: 'AGRA_OPPORTUNITIES_API',
-            url: 'https://agra.org/wp-json/wp/v2/opportunity?per_page=100',
-            baseUrl: 'https://agra.org',
-            enabled: true,
-            assumeAfrican: true
-        },
-        {
-            name: 'ASARECA Consultancies & EOIs',
-            type: 'ASARECA_REST_API',
-            url: 'https://www.asareca.org/wp-json/wp/v2/posts?categories=90&per_page=20',
-            baseUrl: 'https://www.asareca.org',
-            enabled: true,
-            assumeAfrican: true
-        },
-        {
-            name: 'ILRI Procurement & Tenders (CGIAR)',
-            type: 'ILRI_TENDERS_SCRAPER',
-            url: 'https://www.ilri.org/tenders',
-            baseUrl: 'https://www.ilri.org',
-            enabled: true,
-            assumeAfrican: true
-        },
-        {
-            name: 'AATF Tenders & EOIs',
-            type: 'AATF_TENDERS_SCRAPER',
-            url: 'https://www.aatf-africa.org/tenders/',
-            baseUrl: 'https://www.aatf-africa.org',
-            enabled: true,
-            assumeAfrican: true
-        },
-        {
-            name: 'CIMMYT Opportunities & Consultancies (CGIAR)',
-            type: 'CIMMYT_OPPORTUNITIES_API',
-            url: 'https://apply.workable.com/api/v1/widget/accounts/577052',
-            webUrl: 'https://www.cimmyt.org/careers/',
-            baseUrl: 'https://www.cimmyt.org',
-            enabled: true,
-            assumeAfrican: false
-        },
-        {
-            name: 'UNJobNet Consultancies & EOIs',
-            type: 'UNJOBNET_SCRAPER',
-            baseUrl: 'https://www.unjobnet.org',
-            url: 'https://www.unjobnet.org/jobs',
-            enabled: true,
-            assumeAfrican: false,
-            searchKeywords: ['seed', 'crops', 'agribusiness', 'agriculture', 'food security', 'value chain', 'agtech', 'biosafety']
-        },
-        {
-            name: 'FundsforNGOs Grants & Calls for Proposals',
-            type: 'FUNDS_FOR_NGOS_API',
-            baseUrl: 'https://www2.fundsforngos.org',
-            url: 'https://www2.fundsforngos.org/wp-json/wp/v2/posts',
-            enabled: true,
-            assumeAfrican: false,
-            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'agtech', 'biosafety']
-        },
-        {
-            name: 'Global South Opportunities Funding',
-            url: 'https://www.globalsouthopportunities.com/category/funding/feed/',
-            type: 'GLOBAL_SOUTH_OPP_FEED',
-            baseUrl: 'https://www.globalsouthopportunities.com',
-            enabled: true,
-            assumeAfrican: false
-        },
-        {
-            name: 'TenderSure Africa Open Bids',
-            url: 'https://website-api.tendersure.africa/api/v1/core/open-bids/?page=1&page_size=25',
-            type: 'TENDERSURE_API',
-            baseUrl: 'https://www.tendersure.africa',
-            enabled: true,
-            assumeAfrican: true
-        },
-        {
-            name: 'LocateFund African Funding Opportunities',
-            url: 'https://locatefund.com/opportunities/',
-            type: 'LOCATEFUND_API',
-            baseUrl: 'https://locatefund.com',
-            enabled: true,
-            assumeAfrican: true,
-            searchKeywords: ['agriculture', 'seed', 'agribusiness', 'crops', 'farming', 'grant', 'funding', 'call for proposals', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech', 'agrodealer', 'agro-dealer', 'gmo', 'biosafety']
-        },
-        {
-            name: 'LinkedIn Opportunity Search (Serper)',
-            type: 'GOOGLE_SEARCH_API',
-            enabled: true,
-            queryTemplates: [
-                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Consultancy Services" OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("seed systems" OR "seed sector" OR "seed certification" OR "seed quality" OR agrodealer OR "planting materials" OR "seed policy") Africa after:{DATE_FLOOR} -hiring -vacancy -salary',
-                'site:linkedin.com/posts ("AGRA" OR "CGIAR" OR "CIMMYT" OR "IITA" OR "CIAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") (RFP OR EOI OR Consultancy OR "Call for Proposals" OR "Request for Proposals" OR "Terms of Reference" OR "Market Sounding") Africa after:{DATE_FLOOR} -hiring -vacancy',
-                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "Market Sounding") ("digital tools" OR "international trade" OR "trade compliance" OR "paperless trade" OR "supply chain visibility" OR "market intelligence") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
-                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("GMO" OR "genetically modified" OR "biosafety" OR "biotechnology regulation" OR "crop variety release") Africa after:{DATE_FLOOR} -hiring -vacancy -salary',
-                'site:linkedin.com/posts ("Call for Proposals" OR "Call for Applications" OR "Grant Opportunity" OR "EOI" OR "RFP") ("agribusiness" OR "agricultural enterprise" OR "seed enterprise" OR "agro-dealer" OR "youth agribusiness") Africa after:{DATE_FLOOR} -hiring -salary',
-                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("agricultural advisory" OR "agritech" OR "agtech" OR "agri-tech" OR "agri tech" OR "extension services" OR "digital agriculture" OR "farmer advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
-                'site:linkedin.com/posts ("C4IR" OR "MINAGRI" OR "World Economic Forum" OR "Alliance for a Green Revolution" OR "Food Systems") ("agricultural advisory" OR "agriculture" OR "agritech" OR "agtech" OR "agri-tech" OR "agri tech" OR "farmers") ("Expression of Interest" OR EOI OR RFP OR "Call for Proposals") Africa after:{DATE_FLOOR}',
-                'site:linkedin.com/posts ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "ToR") ("farmer advisory" OR "seed advisory" OR "agtech" OR "agritech" OR "agri-tech" OR "agri tech" OR "digital advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary'
-            ]
-        },
-        {
-            name: 'X (Twitter) Opportunity Search (Serper)',
-            type: 'GOOGLE_SEARCH_API',
-            enabled: true,
-            queryTemplates: [
-                '(site:x.com OR site:twitter.com) ("AGRA" OR "CGIAR" OR "CIMMYT" OR "AATF" OR "AfDB" OR "IITA" OR "CORAF") (RFP OR "Call for Proposals" OR "Request for Proposals" OR EOI OR Consultancy) (seed OR agribusiness OR agriculture) after:{DATE_FLOOR} -hiring -vacancy'
-            ]
-        },
-        {
-            name: 'Facebook Opportunity Search (Serper)',
-            type: 'GOOGLE_SEARCH_API',
-            enabled: true,
-            queryTemplates: [
-                'site:facebook.com ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "Consultancy Services") ("seed systems" OR "seed sector" OR "seed certification" OR "seed quality" OR agrodealer OR "planting materials" OR "agricultural advisory" OR "agritech" OR "agtech" OR "agri-tech" OR "agri tech" OR "GMO" OR "biosafety") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
-                'site:facebook.com ("AGRA" OR "CGIAR" OR "CIMMYT" OR "IITA" OR "CIAT" OR "AfDB" OR "AATF" OR "CORAF" OR "ASARECA" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV" OR "MINAGRI") (RFP OR EOI OR Consultancy OR "Call for Proposals" OR "Request for Proposals" OR "Tender" OR "Market Sounding") Africa after:{DATE_FLOOR} -hiring -vacancy',
-                'site:facebook.com ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference" OR "Market Sounding") ("digital tools" OR "international trade" OR "trade compliance" OR "paperless trade" OR "supply chain visibility" OR "market intelligence") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary',
-                'site:facebook.com ("Call for Proposals" OR "Call for Applications" OR "Grant Opportunity" OR "EOI" OR "RFP") ("agribusiness" OR "agricultural enterprise" OR "seed enterprise" OR "agro-dealer" OR "youth agribusiness") Africa after:{DATE_FLOOR} -hiring -salary',
-                'site:facebook.com ("Expression of Interest" OR EOI OR "Request for Proposals" OR RFP OR "Call for Proposals" OR "Terms of Reference") ("farmer advisory" OR "seed advisory" OR "agtech" OR "agritech" OR "agri-tech" OR "agri tech" OR "digital advisory") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -hiring -vacancy -salary'
-            ]
-        }
+        { name: 'IADB Procurement Notices', url: 'https://www.iadb.org/en/how-we-can-work-together/procurement/procurement-projects/procurement-notices', type: 'RENDERED_BLOCK_SCRAPER', baseUrl: 'https://www.iadb.org', enabled: false }
     ]
 };
 const FETCH_OPTIONS = {
@@ -908,6 +978,7 @@ function runRfpTrackerV4() {
         const feed = activeFeeds[idx];
         if (Date.now() - runStartTime > maxDiscoveryMs) {
             Logger.log(`[Discovery Guard] Feed ingestion reached ${Math.round((Date.now() - runStartTime) / 1000)}s. Halting discovery early to guarantee safe AI evaluation, sheet write, and email alerts.`);
+            notifyAdminAlert('Discovery Guard Activated (>270s)', `Feed ingestion reached ${Math.round((Date.now() - runStartTime) / 1000)}s before completing all feeds. Halting discovery to guarantee safe AI evaluation, sheet writes, and email notifications.`);
             break;
         }
 
@@ -959,6 +1030,8 @@ function runRfpTrackerV4() {
                 fetchAfricaEuropeInnovationNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats);
             } else if (feed.type === 'LOCATEFUND_API') {
                 fetchLocateFundOpportunities(feed, existingLinks, existingTitleKeys, bucket, feedStats);
+            } else if (feed.type === 'SAIGE_OPPORTUNITIES_SCRAPER') {
+                fetchSaigeOpportunities(feed, existingLinks, existingTitleKeys, bucket, feedStats);
             } else if (feed.type === 'BLOCK_SCRAPER') {
                 scrapePortalBlockLevel(feed, existingLinks, existingTitleKeys, bucket, feedStats);
             }
@@ -1073,8 +1146,32 @@ function runRfpTrackerV4() {
             }
         }
 
+        // CALIBRATION 1D: Generic Masthead & Multi-Opportunity Roundup Title Alignment
+        // When a post/digest bundles multiple calls or has a generic/masthead title, align item.title to specific opportunity
+        const ROUNDUP_REGEX = /(?:funding[-_]opportunities|grant[-_]roundup|weekly[-_]roundup|opportunities[-_]roundup|grants[-_]roundup|funding[-_]digest|opportunity[-_]digest|funding-opportunities-funder)/i;
+        const isRoundupCandidate = ROUNDUP_REGEX.test(item.link || '') ||
+            /\b(?:funding opportunities|roundup|multiple calls|grants digest)\b/i.test(item.title) ||
+            /\b(?:funder\s*:.*funder\s*:|update\s*:.*update\s*:)\b/i.test(item.description || '');
+        const isGenericTitle = isBareGovernmentOrGenericTitle(item.title);
+
+        if (isRoundupCandidate) {
+            if (evalResult.specificOpportunityTitle && evalResult.specificOpportunityTitle.trim()) {
+                item.title = evalResult.specificOpportunityTitle.trim();
+            }
+            if (!/^\[Roundup\]/i.test(item.title)) {
+                item.title = `[Roundup] ${item.title.replace(/\s*\|\s*(?:LinkedIn|GrantEdge Global|Facebook).*$/i, '').trim()}`;
+            }
+            Logger.log(`[Roundup Alignment] Aligned multi-opportunity title: "${item.title}"`);
+        } else if (isGenericTitle) {
+            if (evalResult.specificOpportunityTitle && evalResult.specificOpportunityTitle.trim() && !isBareGovernmentOrGenericTitle(evalResult.specificOpportunityTitle)) {
+                Logger.log(`[Title Extraction] Replaced generic masthead title "${item.title}" with substantive AI-extracted title: "${evalResult.specificOpportunityTitle.trim()}"`);
+                item.title = evalResult.specificOpportunityTitle.trim();
+            }
+        }
+
         // CALIBRATION 1C: Individual Consultancy Filter
         // Agri Experience is a corporate consulting firm. Filter out all freelance individual consultancies.
+        // Evaluated using the aligned/refined title to catch individual roles previously masked by generic titles.
         const combinedIndividualText = `${item.title} ${item.description || ''} ${evalResult.summary || ''}`.toLowerCase();
         const INDIVIDUAL_CONSULTANCY_REGEX = /\b(?:national\s+consultants?|individual\s+consultants?|individual\s+consultancy|junior\s+consultants?|senior\s+consultants?|senior\s+advisors?|individual\s+contractors?|individual\s+specialists?|consultant\s+individuel|consultante\s+individuelle|international\s+individual|national\s+individual|recrutement\s+d'un\s+consultant\s+individuel|recrutement\s+d'un\s+consultant\s+\(individuel\)|selection\s+of\s+individual\s+consultants?|single\s+consultant|solo\s+consultant|personal\s+consultant|nob\s+level|noa\s+level|noc\s+level)\b/i;
         const isIndividualConsultancy = INDIVIDUAL_CONSULTANCY_REGEX.test(combinedIndividualText) ||
@@ -1088,22 +1185,6 @@ function runRfpTrackerV4() {
             evalResult.businessFit = 'NONE';
             evalResult.goNoGo = 'NO-GO';
             evalResult.summary = "Individual consultancy assignment reserved for single freelance individuals, not consulting firms/organizations.";
-        }
-
-        // CALIBRATION 1D: Multi-Opportunity Roundup Title & Summary Alignment
-        // When a social post or page bundles multiple opportunities, align the row title to the evaluated opportunity and prefix with [Roundup]
-        const ROUNDUP_REGEX = /(?:funding[-_]opportunities|grant[-_]roundup|weekly[-_]roundup|opportunities[-_]roundup|grants[-_]roundup|funding[-_]digest|opportunity[-_]digest|funding-opportunities-funder)/i;
-        const isRoundupCandidate = ROUNDUP_REGEX.test(item.link || '') ||
-            /\b(?:funding opportunities|roundup|multiple calls|grants digest)\b/i.test(item.title) ||
-            /\b(?:funder\s*:.*funder\s*:|update\s*:.*update\s*:)\b/i.test(item.description || '');
-        if (isRoundupCandidate) {
-            if (evalResult.specificOpportunityTitle && evalResult.specificOpportunityTitle.trim()) {
-                item.title = evalResult.specificOpportunityTitle.trim();
-            }
-            if (!/^\[Roundup\]/i.test(item.title)) {
-                item.title = `[Roundup] ${item.title.replace(/\s*\|\s*(?:LinkedIn|GrantEdge Global|Facebook).*$/i, '').trim()}`;
-            }
-            Logger.log(`[Roundup Alignment] Aligned multi-opportunity title: "${item.title}"`);
         }
 
         // CALIBRATION 1E: Hackathon, Developer Coding Challenge & Prize Contest Filter
@@ -1173,11 +1254,23 @@ function runRfpTrackerV4() {
             evalResult.pillar = 'N/A - Outside Core Focus';
         }
 
+        // CALIBRATION 1J: Bare Government Masthead & Uninformative Title Rejection
+        // A listing in Active Open RFPs must have an informative, specific opportunity title.
+        // Drop any candidate that still has a bare government/country masthead or generic shell.
+        if (isBareGovernmentOrGenericTitle(item.title)) {
+            Logger.log(`[Masthead Guard] Rejected opportunity with uninformative/bare masthead title: "${item.title}"`);
+            evalResult.isGenuineOpportunity = false;
+            evalResult.isOpen = false;
+            evalResult.score = 0;
+            evalResult.businessFit = 'NONE';
+            evalResult.goNoGo = 'NO-GO';
+            evalResult.summary = `Bare government/country header ("${item.title}") lacking a specific, actionable organizational tender or consultancy title.`;
+        }
+
         const isProcurementScope = /\b(EOI|Expression of Interest|RFP|RFQ|RFCN|Consultanc[a-z]*|Advisor|Expert|Tender|Call for Proposals|Call for Concept Notes|Request for Concept Notes|Terms of Reference|ToR|Grant|Challenge Fund|Innovation Fund|Horizon Europe|Call for|Funding Opportunity|Research Call|Innovation Call|Roster|Adjunct Scientist|Fellowship|Breeder|Geneticist)\b/i.test(`${item.title} ${item.description || ''}`);
 
         // AI Consistency Guard (Only for legitimate procurement scopes with NO non-procurement signals)
-
-        if (!isVendorAdvertisement && !isIndividualConsultancy && !isAiNonProcurementSummary && !evalResult.isGenuineOpportunity && (evalResult.score >= 50 || evalResult.businessFit === 'HIGH' || evalResult.businessFit === 'MEDIUM') && isProcurementScope) {
+        if (!isVendorAdvertisement && !isIndividualConsultancy && !isAiNonProcurementSummary && !isBareGovernmentOrGenericTitle(item.title) && !evalResult.isGenuineOpportunity && (evalResult.score >= 50 || evalResult.businessFit === 'HIGH' || evalResult.businessFit === 'MEDIUM') && isProcurementScope) {
             Logger.log(`[AI Consistency Guard] Overriding false-negative genuine flag for high-fit opportunity: "${item.title}" (score: ${evalResult.score}, fit: ${evalResult.businessFit})`);
             evalResult.isGenuineOpportunity = true;
             const isClosed = evalResult.closingDate && evalResult.closingDate !== 'Not Specified' && !isNaN(new Date(evalResult.closingDate).getTime()) && new Date(evalResult.closingDate).getTime() < new Date().setHours(0, 0, 0, 0);
@@ -1786,6 +1879,9 @@ function callSerperWithRotation(payload, contextLabel) {
             if (code === 400 && /not enough credits/i.test(body)) {
                 Logger.log(`[Serper Key Exhausted] Key ${keyPreview} ran out of credits (${_serperActiveKeyIndex + 1}/${pool.length}). Rotating to next key...`);
                 _serperActiveKeyIndex++;
+                if (_serperActiveKeyIndex === pool.length - 1) {
+                    notifyAdminAlert('Serper API Credits Low', `Key ${keyPreview} ran out of credits. Engine is on the final active Serper key (${_serperActiveKeyIndex + 1}/${pool.length}). Please replenish Serper API credits soon.`);
+                }
                 continue;
             }
 
@@ -1799,6 +1895,7 @@ function callSerperWithRotation(payload, contextLabel) {
         }
 
         Logger.log(`[Serper Pool Exhausted] All ${pool.length} Serper API key(s) exhausted. Cascading to alternative search providers...`);
+        notifyAdminAlert('Serper API Key Pool Depleted', `All ${pool.length} Serper API key(s) have run out of credits. Free fallback cascade engaged.`);
     }
 
     // 2. Fallback Provider 1: Tavily AI Search (1,000 free/mo, NO credit card)
@@ -2012,7 +2109,7 @@ function verifyLinkReachable(link) {
     if (!/^https?:\/\/[a-z0-9.-]+\.[a-z]{2,}/i.test(trimmed)) return false;
 
     // Fast-pass known authentic organizational & portal domains without network fetch
-    const TRUSTED_DOMAINS = /\b(?:afdb\.org|worldbank\.org|ifad\.org|ungm\.org|un\.org|undp\.org|unjobnet\.org|agra\.org|cgiar\.org|cimmyt\.org|ilri\.org|aatf-africa\.org|asareca\.org|developmentaid\.org|fundsforngos\.org|trademarkafrica\.com|trade-mark\.org|linkedin\.com|facebook\.com)\b/i;
+    const TRUSTED_DOMAINS = /\b(?:afdb\.org|worldbank\.org|ifad\.org|ungm\.org|un\.org|undp\.org|unjobnet\.org|agra\.org|cgiar\.org|cimmyt\.org|ilri\.org|aatf-africa\.org|asareca\.org|developmentaid\.org|fundsforngos\.org|trademarkafrica\.com|trade-mark\.org|saigeopportunity\.org|linkedin\.com|facebook\.com)\b/i;
     if (TRUSTED_DOMAINS.test(trimmed)) return true;
 
     // Lightweight verification for unknown domains (accept 2xx, 3xx, and 401/403 Cloudflare protected pages)
@@ -2062,9 +2159,14 @@ function fetchWorldBankNotices(feed, existingLinks, existingTitleKeys, bucket, f
             const noticeType = (notice.notice_type || '').trim();
 
             // Exclude past contract awards
-
-            if (/contract award/i.test(noticeType)) return;
-            if (notice.notice_status && !/published|open/i.test(notice.notice_status)) return;
+            if (/contract award/i.test(noticeType)) {
+                if (feedStats) { feedStats.seen++; feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
+            if (notice.notice_status && !/published|open/i.test(notice.notice_status)) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
             const title = decodeHtmlEntities(notice.bid_description || notice.notice_lang_name || notice.project_name || '');
             if (!title) return;
             const noticeId = notice.id || '';
@@ -2073,7 +2175,10 @@ function fetchWorldBankNotices(feed, existingLinks, existingTitleKeys, bucket, f
             const country = notice.project_ctry_name || notice.countryname || '';
             const refNo = notice.bid_reference_no ? ` [Ref: ${notice.bid_reference_no}]` : '';
             const description = `${title}${refNo} - Project: ${notice.project_name || ''} - Country: ${country} - Notice Type: ${noticeType} - Date: ${notice.noticedate || ''}`;
-            if (notice.noticedate && !isOnOrAfterFreshnessFloor(notice.noticedate)) return;
+            if (notice.noticedate && !isOnOrAfterFreshnessFloor(notice.noticedate)) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
             addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, false, null, null, null, feedStats);
         });
         Utilities.sleep(250);
@@ -2095,7 +2200,11 @@ function fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedSta
     };
     const response = fetchWithRetry(url, {
         method: 'POST',
-        contentType: 'application/json',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
         payload: JSON.stringify(payload),
         muteHttpExceptions: true
     });
@@ -2124,7 +2233,10 @@ function fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedSta
         const publicationDate = notice.PD || notice.publicationDate || null;
         const description = `${title} — published ${publicationDate || 'date not specified'}, country: ${notice.CY || 'n/a'}`;
         if (!link) return;
-        if (publicationDate && !isOnOrAfterFreshnessFloor(publicationDate)) return;
+        if (publicationDate && !isOnOrAfterFreshnessFloor(publicationDate)) {
+            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            return;
+        }
         addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, false, null, null, null, feedStats);
     });
 }
@@ -2191,7 +2303,10 @@ function fetchAgraNegotiationAbstracts(feed, existingLinks, existingTitleKeys, b
             const closeDate = new Date(item.CloseDate);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            if (!isNaN(closeDate.getTime()) && closeDate.getTime() < today.getTime()) return;
+            if (!isNaN(closeDate.getTime()) && closeDate.getTime() < today.getTime()) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
         }
 
         const title = item.NegotiationTitle || item.Negotiation || `AGRA Negotiation ${item.AuctionHeaderId || ''}`;
@@ -2423,12 +2538,14 @@ function processAllBusinessAfricaPage(url, feed, siteBase, existingLinks, existi
     if (!items.length) return true;
     items.forEach(item => {
         // Check deadline if present
-
         if (item.deadline) {
             const deadlineDate = new Date(item.deadline);
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            if (!isNaN(deadlineDate.getTime()) && deadlineDate.getTime() < today.getTime()) return;
+            if (!isNaN(deadlineDate.getTime()) && deadlineDate.getTime() < today.getTime()) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
         }
 
         const title = item.title || '';
@@ -2514,10 +2631,8 @@ function fetchAgraOpportunitiesNotices(feed, existingLinks, existingTitleKeys, b
             const cleanTitle = rawTitle.replace(/&#8211;/g, '–').replace(/&#8217;/g, "'").replace(/&#038;/g, '&').replace(/<[^>]+>/g, '').trim();
             if (!cleanTitle) return;
             if (/\b(Officer|Coordinator|Director|Lead|Specialist|Manager|Accountant|Associate|Assistant|Intern)\b/i.test(cleanTitle) &&
-
                 !/\b(Consultant|Consultancy|Firm|RFP|EOI|Call for Proposals|Call for Concept Notes|Grant|Challenge Fund|RFCN)\b/i.test(cleanTitle)) {
-                if (feedStats) feedStats.boilerplate = (feedStats.boilerplate || 0) + 1;
-
+                if (feedStats) { feedStats.seen++; feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
                 return;
             }
 
@@ -2564,9 +2679,8 @@ function fetchAgraOpportunitiesNotices(feed, existingLinks, existingTitleKeys, b
             if (!title || !link) continue;
             if (!/^https?:\/\//i.test(link)) link = feed.baseUrl + (link.startsWith('/') ? '' : '/') + link;
             if (/\b(Officer|Coordinator|Director|Lead|Specialist|Manager|Accountant|Associate|Assistant|Intern)\b/i.test(title) &&
-
                 !/\b(Consultant|Consultancy|Firm|RFP|EOI|Call for Proposals|Call for Concept Notes|Grant|Challenge Fund|RFCN)\b/i.test(title)) {
-                if (feedStats) feedStats.boilerplate = (feedStats.boilerplate || 0) + 1;
+                if (feedStats) { feedStats.seen++; feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
                 continue;
             }
 
@@ -2592,6 +2706,14 @@ function fetchAgraOpportunitiesNotices(feed, existingLinks, existingTitleKeys, b
 
 function fetchAsarecaNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     const url = feed.url || 'https://www.asareca.org/wp-json/wp/v2/posts?categories=90&per_page=20';
+
+    // Fast Serper Fallback: Bypass slow/hanging asareca.org WordPress server
+    if (feed.preferSerperFallback) {
+        Logger.log(`[ASARECA REST API] Fast Serper fallback engaged directly (bypassing slow WordPress server).`);
+        queryPortalSerperFallback('asareca.org', ['"Terms of Reference"', '"Call for Proposals"', 'Consultancy', '"Expression of Interest"', 'EOI', 'RFP'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
+        return;
+    }
+
     let response;
 
     try {
@@ -2614,12 +2736,16 @@ function fetchAsarecaNotices(feed, existingLinks, existingTitleKeys, bucket, fee
     try {
         items = JSON.parse(response.getContentText());
     } catch (e) {
-        Logger.log(`[ASARECA REST API] Failed to parse JSON: ${e.message}`);
-
+        Logger.log(`[ASARECA REST API] Failed to parse JSON: ${e.message}. Engaging fast Serper fallback.`);
+        queryPortalSerperFallback('asareca.org', ['"Terms of Reference"', '"Call for Proposals"', 'Consultancy', '"Expression of Interest"', 'EOI', 'RFP'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
         return;
     }
 
-    if (!Array.isArray(items) || !items.length) return;
+    if (!Array.isArray(items) || !items.length) {
+        queryPortalSerperFallback('asareca.org', ['"Terms of Reference"', '"Call for Proposals"', 'Consultancy', '"Expression of Interest"', 'EOI', 'RFP'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
+        return;
+    }
+
     items.forEach(item => {
         const rawTitle = (item.title && item.title.rendered) ? item.title.rendered : '';
         const cleanTitle = rawTitle.replace(/&#8211;/g, '–').replace(/&#8217;/g, "'").replace(/&#038;/g, '&').replace(/<[^>]+>/g, '').trim();
@@ -2641,7 +2767,6 @@ function fetchAsarecaNotices(feed, existingLinks, existingTitleKeys, bucket, fee
             existingTitleKeys,
             bucket,
             true, // assumeAfrican = true
-
             null,
             null,
             null,
@@ -2664,21 +2789,28 @@ function fetchIlriNotices(feed, existingLinks, existingTitleKeys, bucket, feedSt
     try {
         response = fetchWithRetry(url, FETCH_OPTIONS);
     } catch (e) {
-        Logger.log(`[ILRI Scraper] Request failed for ${url}: ${e.message}`);
-
+        Logger.log(`[ILRI Scraper] Request failed for ${url}: ${e.message}. Engaging fast Serper fallback.`);
+        queryPortalSerperFallback('ilri.org', ['Tenders', 'Consultancy', 'RFP', 'EOI', '"Request for Proposals"'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
         return;
     }
 
     const code = response.getResponseCode();
     if (code !== 200) {
-        Logger.log(`[ILRI Scraper] Non-200 response (${code}) fetching ${url}`);
-
+        Logger.log(`[ILRI Scraper] Non-200 response (${code}) fetching ${url}. Engaging fast Serper fallback.`);
+        queryPortalSerperFallback('ilri.org', ['Tenders', 'Consultancy', 'RFP', 'EOI', '"Request for Proposals"'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
         return;
     }
 
     const html = response.getContentText();
     const rows = html.match(/<tr[\s\S]*?<\/tr>/gi) || [];
-    if (!rows.length) return;
+    if (!rows.length) {
+        Logger.log(`[ILRI Scraper] No table rows found. Engaging fast Serper fallback.`);
+        queryPortalSerperFallback('ilri.org', ['Tenders', 'Consultancy', 'RFP', 'EOI', '"Request for Proposals"'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
+        return;
+    }
+
+    let validRowsSeen = 0;
+    let activeCandidatesAdded = 0;
     rows.forEach(row => {
         const linkMatch = row.match(/<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>([\s\S]*?)<\/a>/i);
         if (!linkMatch || !linkMatch[1].includes('/tenders/')) return;
@@ -2690,48 +2822,61 @@ function fetchIlriNotices(feed, existingLinks, existingTitleKeys, bucket, feedSt
         const cells = (row.match(/<td[\s\S]*?<\/td>/gi) || []).map(td => td.replace(/<[^>]+>/g, '').trim());
         if (cells.length < 3) return;
 
+        validRowsSeen++;
+
         // ILRI Table Structure: [0] Title, [1] Reference No, [2] Posting Date, [3] Closing Date, [4] Status, [5] Link
         const title = cells[0] || '';
         const ref = cells[1] || '';
         const postingDate = cells[2] || '';
         const deadline = cells[3] || '';
-        const category = cells[4] || '';
+        const status = cells[4] || '';
         if (!title) return;
 
-        // Filter out past deadline before AI evaluation
+        // Filter out if explicitly marked Closed on the ILRI portal
+        if (status.toLowerCase() === 'closed') {
+            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            return;
+        }
 
+        // Filter out past deadline before AI evaluation
         if (deadline) {
             const closing = heuristicClosingCheck(`Deadline: ${deadline}`);
             if (!closing.isOpen && closing.closingDate !== 'Not Specified') {
-                if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
                 return;
             }
         }
 
-        const displayTitle = (title.startsWith('ILRI') && category) ? `${title}: ${category}` : title;
         const description = [
             'Buyer: ILRI / CGIAR (International Livestock Research Institute)',
             ref ? `Ref: ${ref}` : '',
-            category ? `Category: ${category}` : '',
-            deadline ? `Deadline: ${deadline}` : ''
+            status ? `Status: ${status}` : '',
+            deadline ? `Deadline: ${deadline}` : '',
+            postingDate ? `Posted: ${postingDate}` : ''
         ].filter(Boolean).join(' | ');
+
         addCandidateIfNew(
             feed.name,
-            displayTitle,
+            title,
             path,
-            description || displayTitle,
+            description || title,
             existingLinks,
             existingTitleKeys,
             bucket,
             true, // assumeAfrican = true
-
             null,
             null,
             null,
             feedStats
         );
+        activeCandidatesAdded++;
     });
+
+    // Auto-Pivot: If all notices on the legacy table are expired/closed, pivot to Google Serper
+    if (validRowsSeen > 0 && activeCandidatesAdded === 0) {
+        Logger.log(`[ILRI Scraper] All ${validRowsSeen} tenders on legacy portal are closed/expired. Auto-pivoting to Serper fallback.`);
+        queryPortalSerperFallback('ilri.org', ['Tenders', 'Consultancy', 'RFP', 'EOI', '"Request for Proposals"'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
+    }
 }
 
 /**
@@ -2775,6 +2920,20 @@ function fetchAatfNotices(feed, existingLinks, existingTitleKeys, bucket, feedSt
         const deadline = dateMatch ? dateMatch[1].trim() : '';
         const statusMatch = sec.match(/Status:\s*(?:<[^>]+>)*\s*<b>([A-Za-z]+)<\/b>/i) || sec.match(/Status:\s*(?:<[^>]+>)*\s*([A-Za-z]+)/i);
         const status = statusMatch ? statusMatch[1].trim() : '';
+
+        // Drop explicitly closed or past-deadline tenders before AI evaluation
+        if (/closed/i.test(status)) {
+            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            return;
+        }
+        if (deadline) {
+            const closing = heuristicClosingCheck(`Closing Date: ${deadline}`);
+            if (!closing.isOpen && closing.closingDate !== 'Not Specified') {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
+        }
+
         const description = [
             'Buyer: AATF (African Agricultural Technology Foundation)',
             status ? `Status: ${status}` : '',
@@ -2837,17 +2996,21 @@ function fetchCimmytOpportunities(feed, existingLinks, existingTitleKeys, bucket
                     if (!title || !link) return;
 
                     // Geography check: Focus strictly on African stations or explicit Pan-African programs
-
                     const isAfrican = isAfricaRelated(`${country} ${city} ${title} ${dept}`);
                     if (!isAfrican) {
                         const hasAfricaContext = /africa|sub-saharan/i.test(`${title} ${dept}`);
                         const isInternationalConsultancy = /consultan|advisory/i.test(title) && /internationally recruited|global/i.test(title);
-                        if (!hasAfricaContext && !isInternationalConsultancy) return;
+                        if (!hasAfricaContext && !isInternationalConsultancy) {
+                            if (feedStats) { feedStats.seen++; feedStats.notAfrican++; feedStats.filtered++; feedStats.preAiRejected++; }
+                            return;
+                        }
                     }
 
                     // Skip non-consulting routine manual labor, drivers, technicians, or local Spanish non-African postings
-
-                    if (/ayudante|asistente|reclutamiento local|plomero|jardinero|mantenimiento|seguridad|driver|auxiliar|chofer|cocina|limpieza|technician|supervisor/i.test(title)) return;
+                    if (/ayudante|asistente|reclutamiento local|plomero|jardinero|mantenimiento|seguridad|driver|auxiliar|chofer|cocina|limpieza|technician|supervisor/i.test(title)) {
+                        if (feedStats) { feedStats.seen++; feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
+                        return;
+                    }
                     let cleanTitle = title.replace(/^Job announcement for\s+/i, 'CGIAR Expert Roster: ');
                     const displayTitle = `CIMMYT: ${cleanTitle} (${country || 'Africa'})`;
                     const description = [
@@ -2875,10 +3038,12 @@ function fetchCimmytOpportunities(feed, existingLinks, existingTitleKeys, bucket
                 });
             }
         } else {
-            Logger.log(`[CIMMYT API] Non-200 response (${code}) from ${apiUrl}`);
+            Logger.log(`[CIMMYT API] Non-200 response (${code}) from ${apiUrl}. Engaging Serper fallback.`);
+            fetchCimmytSerperFallback(feed, existingLinks, existingTitleKeys, bucket, feedStats);
         }
     } catch (e) {
-        Logger.log('[CIMMYT API] Error fetching Workable API: ' + e.message);
+        Logger.log('[CIMMYT API] Error fetching Workable API: ' + e.message + '. Engaging Serper fallback.');
+        fetchCimmytSerperFallback(feed, existingLinks, existingTitleKeys, bucket, feedStats);
     }
 
     // 2. Direct Scrape of CIMMYT Careers page for active Tenders & RFPs card
@@ -3015,24 +3180,27 @@ function processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTit
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     jobs.forEach(job => {
-        if (job.IsExpired || job.IsGone) return;
+        if (job.IsExpired || job.IsGone) {
+            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            return;
+        }
         if (job.DeadlineUtc) {
             const deadlineDate = new Date(job.DeadlineUtc);
-            if (!isNaN(deadlineDate.getTime()) && deadlineDate.getTime() < today.getTime()) return;
+            if (!isNaN(deadlineDate.getTime()) && deadlineDate.getTime() < today.getTime()) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
         }
 
         const title = (job.Title || '').trim();
         if (!title) return;
 
         // Filter out salaried employee positions (UN/CGIAR internal staff recruitments)
-
         const isConsultancyOrTender = /\b(Consultant|Consultancy|Contractor|Expert|Specialist Adviser|Firm|RFP|EOI|Tender|Call for)\b/i.test(title) ||
-
             /\b(Consultancy|Individual Contractor|Service Contract|Tender)\b/i.test(job.AppType || '');
         const isSalariedStaff = /\b(Officer|Director|Scientist|Supervisor|Specialist-Scientist|Clerk|Receptionist|Assistant|Accountant|Driver|Intern)\b/i.test(title);
         if (isSalariedStaff && !isConsultancyOrTender) {
-            if (feedStats) feedStats.boilerplate = (feedStats.boilerplate || 0) + 1;
-
+            if (feedStats) { feedStats.seen++; feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
             return;
         }
 
@@ -3209,12 +3377,10 @@ function fetchTenderSureNotices(feed, existingLinks, existingTitleKeys, bucket, 
         const rawDeadline = bid.closing_date || '';
 
         // Filter out already-closed bids
-
         if (rawDeadline && rawDeadline !== 'N/A') {
             const parsedDeadline = parseDateFlexible(rawDeadline);
             if (parsedDeadline && !isNaN(parsedDeadline.getTime()) && parsedDeadline.getTime() < today.getTime()) {
-                if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
                 return;
             }
         }
@@ -3554,7 +3720,14 @@ function scrapeRenderedPortalBlockLevel(feed, existingLinks, existingTitleKeys, 
             return;
         }
 
-        if (detectBotBlockSignature(renderedHtml)) { if (page > 1) break; return; }
+        if (detectBotBlockSignature(renderedHtml)) {
+            Logger.log(`[${feed.name}] Bot-block detected on page ${page}. Engaging Serper fallback.`);
+            if (feed.url && feed.url.includes('afdb.org')) {
+                queryPortalSerperFallback('afdb.org', ['Expression of Interest', 'EOI', 'Consultancy Services', 'Consultant', 'Procurement Notice', 'Request for Proposals', 'Tender'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
+            }
+            if (page > 1) break;
+            return;
+        }
 
         const scoredCandidates = extractScoredBlockCandidates(renderedHtml, feed.baseUrl);
         scoredCandidates.sort((a, b) => b.score - a.score);
@@ -3612,8 +3785,8 @@ function fetchAfricaEuropeInnovationNotices(feed, existingLinks, existingTitleKe
             const deadline = deadlineMatch ? decodeHtmlEntities(deadlineMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) : '';
             const description = [
                 'Source: Africa-Europe Innovation Platform (AEIP)',
-                org,
-                deadline,
+                org ? `Buyer: ${org}` : '',
+                deadline ? (deadline.toLowerCase().startsWith('deadline') ? deadline : `Deadline: ${deadline}`) : '',
                 'Topic: Food Systems & Agriculture'
             ].filter(Boolean).join(' | ');
             addCandidateIfNew(
@@ -3730,6 +3903,195 @@ function fetchLocateFundOpportunities(feed, existingLinks, existingTitleKeys, bu
         Logger.log(`[${feed.name}] Direct portal blocked or returned 0 items (HTTP ${code}). Engaging Google Serper fallback.`);
         const keywords = feed.searchKeywords || ['agriculture', 'seed', 'agribusiness', 'grant', 'funding'];
         queryPortalSerperFallback('locatefund.com', keywords, feed, existingLinks, existingTitleKeys, bucket, feedStats);
+    }
+}
+
+/**
+ * Computes calendar deadline date (YYYY-MM-DD) and formatted string from SAIGE relative countdowns
+ * (e.g. "17 days left", "2 days left", "Closes today", "11 weeks left", "Rolling").
+ */
+function computeSaigeDeadline(countdownText, baseDate) {
+    if (!countdownText) return { deadlineStr: null, formattedDate: null };
+    const raw = countdownText.trim().toLowerCase();
+    const now = baseDate || new Date();
+
+    if (raw === 'closes today' || raw === 'closing today') {
+        const d = new Date(now.getTime());
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        return { deadlineStr: `Deadline: ${dateStr} (Closes today)`, formattedDate: dateStr };
+    }
+
+    if (raw === 'rolling') {
+        return { deadlineStr: 'Deadline: Rolling (Open-ended)', formattedDate: 'Rolling' };
+    }
+
+    const dayMatch = raw.match(/^(\d+)\s+days?\s+left$/);
+    if (dayMatch) {
+        const days = parseInt(dayMatch[1], 10);
+        const target = new Date(now.getTime() + days * 86400000);
+        const yyyy = target.getFullYear();
+        const mm = String(target.getMonth() + 1).padStart(2, '0');
+        const dd = String(target.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        return { deadlineStr: `Deadline: ${dateStr} (${days} days left)`, formattedDate: dateStr };
+    }
+
+    const weekMatch = raw.match(/^(\d+)\s+weeks?\s+left$/);
+    if (weekMatch) {
+        const weeks = parseInt(weekMatch[1], 10);
+        const target = new Date(now.getTime() + weeks * 7 * 86400000);
+        const yyyy = target.getFullYear();
+        const mm = String(target.getMonth() + 1).padStart(2, '0');
+        const dd = String(target.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        return { deadlineStr: `Deadline: ${dateStr} (~${weeks} weeks left)`, formattedDate: dateStr };
+    }
+
+    const monthMatch = raw.match(/^(\d+)\s+months?\s+left$/);
+    if (monthMatch) {
+        const months = parseInt(monthMatch[1], 10);
+        const target = new Date(now.getTime() + months * 30 * 86400000);
+        const yyyy = target.getFullYear();
+        const mm = String(target.getMonth() + 1).padStart(2, '0');
+        const dd = String(target.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+        return { deadlineStr: `Deadline: ${dateStr} (~${months} months left)`, formattedDate: dateStr };
+    }
+
+    return { deadlineStr: `Deadline: ${countdownText}`, formattedDate: null };
+}
+
+/**
+ * PARSER 4o: SAIGE AFRICA OPPORTUNITY PLATFORM SCRAPER
+ * Ingests live agricultural funding, grants, tenders, RFQs, agribusiness accelerators,
+ * and trade opportunities across Africa from SAIGE Opportunity (https://saigeopportunity.org).
+ * Extracts individual opportunity cards, deadlines, values, funders, and slugs (/opportunities/[slug])
+ * directly from Next.js RSC payload and HTML, ensuring deep, actionable links and concrete closing dates.
+ */
+function fetchSaigeOpportunities(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
+    const baseUrl = feed.baseUrl || 'https://saigeopportunity.org';
+    const targets = [
+        `${baseUrl}/opportunities?family=funding`,
+        `${baseUrl}/opportunities?family=funding&page=2`,
+        `${baseUrl}/opportunities?family=funding&sort=fresh`,
+        `${baseUrl}/opportunities?family=funding&sector=agri-inputs`,
+        feed.marketUrl || `${baseUrl}/opportunities?family=market`,
+        `${baseUrl}/opportunities?family=market&sort=fresh`,
+        `${baseUrl}/opportunities?urg=fresh`,
+        `${baseUrl}/opportunities?q=seed`,
+        `${baseUrl}/opportunities?family=support`,
+        feed.url || `${baseUrl}/opportunities`
+    ];
+    let candidatesFound = 0;
+    const seenPaths = new Set();
+
+    targets.forEach((targetUrl, idx) => {
+        if (idx > 0) Utilities.sleep(150);
+        let response;
+        try {
+            response = fetchWithRetry(targetUrl, FETCH_OPTIONS);
+        } catch (e) {
+            Logger.log(`[${feed.name}] Fetch error for ${targetUrl}: ${e.message}`);
+            return;
+        }
+
+        const code = response ? response.getResponseCode() : 0;
+        const body = response ? response.getContentText() : '';
+        if (code !== 200 || !body || body.includes('Just a moment...')) return;
+
+        // Unified Card Extraction: Splits body into isolated opp-card blocks
+        // Handles both Next.js RSC JSON chunks and server-rendered HTML blocks without regex bleeding
+        const rawBlocks = body.split(/(?:\\"className\\":\\"opp-card\\"|<a[^>]+class=["'][^"']*opp-card)/i);
+        for (let bIdx = 1; bIdx < rawBlocks.length; bIdx++) {
+            const b = rawBlocks[bIdx];
+            const hrefM = b.match(/href[\\"=:\s]+(\/opportunities\/[a-z0-9_-]+)/i);
+            if (!hrefM) continue;
+            const path = hrefM[1];
+            if (seenPaths.has(path)) continue;
+
+            let title = null;
+            const titleJson = b.match(/opp-title[\\"=:\s,\w]+children[\\"=:\s]+(?:\\"|")((?:[^"\\\r\n]|\\.)*?)(?:\\"|")/i);
+            const titleHtml = b.match(/<h3[^>]*class=["']opp-title["'][^>]*>([^<]+)<\/h3>/i);
+            if (titleJson) {
+                title = titleJson[1].replace(/\\u0026/g, '&').replace(/&#8211;/g, '–').replace(/\\'/g, "'").replace(/\\"/g, '"').trim();
+            } else if (titleHtml) {
+                title = decodeHtmlEntities(titleHtml[1].trim());
+            }
+
+            if (!title || title.length < 5) continue;
+            seenPaths.add(path);
+
+            let org = null;
+            const orgJson = b.match(/opp-org[\\"=:\s,\w]+children[\\"=:\s]+(?:\\"|")((?:[^"\\\r\n]|\\.)*?)(?:\\"|")/i);
+            const orgHtml = b.match(/<span[^>]*class=["']opp-org["'][^>]*>([^<]+)<\/span>/i);
+            if (orgJson) {
+                org = orgJson[1].replace(/\\u0026/g, '&').replace(/\\'/g, "'").trim();
+            } else if (orgHtml) {
+                org = decodeHtmlEntities(orgHtml[1].trim());
+            }
+
+            let subtype = null;
+            const subJson = b.match(/opp-subtype[\\"=:\s,\w]+children[\\"=:\s]+(?:\\"|")((?:[^"\\\r\n]|\\.)*?)(?:\\"|")/i);
+            const subHtml = b.match(/<div[^>]*class=["']opp-subtype["'][^>]*>([^<]+)<\/div>/i);
+            if (subJson) {
+                subtype = subJson[1].replace(/\\u0026/g, '&').trim();
+            } else if (subHtml) {
+                subtype = decodeHtmlEntities(subHtml[1].trim());
+            }
+
+            let value = null;
+            const valJson = b.match(/opp-value[\\"=:\s,\w]+children[\\"=:\s]+(?:\\"|")((?:[^"\\\r\n]|\\.)*?)(?:\\"|")/i);
+            const valHtml = b.match(/<span[^>]*class=["']opp-value["'][^>]*>([^<]+)<\/span>/i);
+            if (valJson) {
+                value = valJson[1].replace(/\\u0026/g, '&').replace(/\\u0016/g, '–').replace(/^\$+/, '$').trim();
+            } else if (valHtml) {
+                value = decodeHtmlEntities(valHtml[1].trim()).replace(/^\$+/, '$');
+            }
+
+            // Extract Deadline / Countdown (e.g. "17 days left", "2 days left", "Closes today", "Rolling")
+            const cdM = b.match(/opp-countdown[\s\S]*?(?:\\"|>|")(\d+\s+(?:days?|weeks?|months?)\s+left|closes?\s+today|closing\s+soon|rolling|closed)(?:\\"|<|")/i);
+            const countdownText = cdM ? cdM[1].trim() : null;
+            if (countdownText && countdownText.toLowerCase() === 'closed') {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                continue;
+            }
+            const deadlineInfo = computeSaigeDeadline(countdownText);
+
+            const directLink = `${baseUrl}${path}`;
+            const descParts = [
+                `Buyer/Funder: ${org || 'SAIGE Africa Partner'}`,
+                `Opportunity Type: ${subtype || 'Grant / Tender'}`
+            ];
+            if (value && value !== ',') descParts.push(`Value: ${value}`);
+            if (deadlineInfo.deadlineStr) descParts.push(deadlineInfo.deadlineStr);
+            descParts.push(`Source: SAIGE Africa Opportunity Platform (${path})`);
+            const description = descParts.join(' | ');
+
+            addCandidateIfNew(
+                feed.name,
+                title,
+                directLink,
+                description,
+                existingLinks,
+                existingTitleKeys,
+                bucket,
+                true, // Pan-African agricultural platform
+                targetUrl,
+                null,
+                null,
+                feedStats
+            );
+            candidatesFound++;
+        }
+    });
+
+    // Strategy D: Serper fallback if direct fetch yielded 0 items
+    if (candidatesFound === 0) {
+        Logger.log(`[${feed.name}] Direct fetch yielded 0 items. Engaging Serper fallback for individual opportunity paths.`);
+        queryPortalSerperFallback('saigeopportunity.org/opportunities', ['agriculture', 'seed', 'agribusiness', 'tenders', 'rfp', 'rfq', 'grant', 'funding'], feed, existingLinks, existingTitleKeys, bucket, feedStats);
     }
 }
 
@@ -3996,6 +4358,11 @@ function evaluateRfpSingleCallWithGemini(batchItems) {
        - NEVER hallucinate an agricultural or seed systems scope for non-agricultural tenders (e.g. refugee education, municipal planning) merely because they mention an African country where Agri Experience operates.
        - Salaried employment posts, hiring announcements ('we are hiring', 'we\'re hiring', 'job vacancy') are NOT RFPs/grants. Classify as isGenuineOpportunity: FALSE, isOpen: FALSE, businessFit: 'NONE', score: 0, goNoGo: 'NO-GO'.
 
+       BARE GOVERNMENT MASTHEADS & GENERIC NATIONAL HEADERS:
+       - Documents titled with bare country/government names (e.g. "REPUBLIC OF KENYA", "GOVERNMENT OF RWANDA", "United Republic of Tanzania") that lack a specific, actionable organizational consultancy, procurement, or grant assignment described in the context:
+         MUST be classified as: isGenuineOpportunity: FALSE, isOpen: FALSE, businessFit: "NONE", score: 0, goNoGo: "NO-GO",
+         with summary stating: "Bare government/country header document without an actionable organizational consultancy or procurement assignment."
+
        AFRICAN DEVELOPMENT BANK (AfDB) & OFFICIAL PORTAL EOI NOTICES:
        The African Development Bank (afdb.org) publishes official Expressions of Interest and Consultancy RFPs under URLs containing '/documents/eoi-' or '/consultants/eoi-'. Solicitations titled with 'EOI', 'Expression of Interest', 'Consultancy Services', or 'Consulting Firm' on afdb.org are GENUINE, OFFICIAL PROCUREMENT OPPORTUNITIES (isGenuineOpportunity: TRUE).
        Do NOT mislabel them as institutional document pages or generic repositories. Summarize the actual consultancy scope (e.g. advisory services, capacity building, startup acceleration) from the title and context.
@@ -4085,7 +4452,10 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
 
     10. specificOpportunityTitle:
 
-       For multi-opportunity roundup posts or grant digests (e.g. social media posts from GrantEdge, Opportunities for Youth, FundsforNGOs, etc.): provide the exact name of the SINGLE best-fitting opportunity evaluated, prefixed with "[Roundup] " (e.g. "[Roundup] Halcyon Africa Innovation in Agriculture & Food Security Accelerator 2027"). For single dedicated RFPs/tenders, return the original opportunity title or leave null.
+       - Multi-Opportunity Roundup Posts: For digests or social media roundup posts that bundle multiple opportunities (e.g. from GrantEdge, Opportunities for Youth, FundsforNGOs, LinkedIn digests): provide the exact name of the SINGLE best-fitting opportunity evaluated, prefixed with "[Roundup] " (e.g. "[Roundup] Halcyon Africa Innovation in Agriculture & Food Security Accelerator 2027").
+       - Generic, Uninformative, or Masthead Titles: When evaluating a candidate whose scraped Title is generic, uninformative, a bare country/government masthead (e.g. "REPUBLIC OF KENYA", "GOVERNMENT OF RWANDA", "United Republic of Tanzania", "Kenya"), or a bare document type shell (e.g. "Request for Proposals", "REQUEST FOR PROPOSALS (RFP)", "Tender Document", "Bidding Document", "Consultancy Services", "request for proposal for consulting firms", "Expression of Interest", "Project-related Procurement", "Procurement Notice"):
+         You MUST extract and construct a concise, substantive, professional title combining the issuing client/authority and assignment subject from the context (e.g. "National Biosafety Authority Kenya - Consultancy for Biosafety Public Awareness Baseline Survey" or "TradeMark Africa - BPR Consultancy for CALAO Trade Corridors").
+       - For standard opportunities that already have specific, descriptive titles (e.g. "EOI - Rwanda - TAAT Technical Advisor – Seed Systems"), return the original opportunity title or leave null.
 
     CRITICAL CONGRUENCE REQUIREMENT (Summary & Scoring Alignment):
     Your summary, isGenuineOpportunity, isOpen, score, and goNoGo MUST be in 100% strict congruence:
@@ -4148,11 +4518,15 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
             'Evaluator'
         );
         if (attempt.success) aiEvaluations = attempt.data;
-        else Logger.log('[Gemini Evaluator] Fallback models in the chain failed. Trying free-tier fallback providers.');
+        else {
+            Logger.log('[Gemini Evaluator] Fallback models in the chain failed. Trying free-tier fallback providers.');
+            notifyAdminAlert('Gemini AI Models Failed in Evaluation Chain', 'All Gemini fallback models in the chain failed. Switched to free-tier fallback providers (Groq/Cerebras/heuristics).');
+        }
     } else if (!geminiApiKey) {
         Logger.log('[Gemini Evaluator] No GEMINI_API_KEY configured. Trying free-tier fallback providers.');
     } else {
         Logger.log('[Gemini Quota Guard] Daily call budget exhausted. Trying free-tier fallback providers.');
+        notifyAdminAlert('Gemini API Quota Guard Depleted', 'Daily call budget for Gemini API was exhausted. Switched to secondary fallback providers.');
     }
 
     if (!aiEvaluations) {
@@ -4464,6 +4838,44 @@ function decodeHtmlEntities(str) {
 }
 
 /**
+ * BARE GOVERNMENT / COUNTRY MASTHEAD & GENERIC DOCUMENT SHELL DETECTOR
+ * Detects titles that are bare country/government names (e.g. "REPUBLIC OF KENYA")
+ * or bare procurement category headers lacking substantive project/service subject.
+ */
+
+function isBareGovernmentOrGenericTitle(title) {
+    if (!title) return true;
+    const clean = String(title).trim().replace(/^[\s\(\[\{]+|[\s\)\]\}]+$/g, '');
+    const GENERIC_TITLE_PATTERNS = [
+        // Bare country or government mastheads
+        /^(?:the\s+)?(?:republic|government|state|kingdom|federation)\s+of\s+[a-z\s]+$/i,
+        /^(?:republic\s+of\s+kenya|government\s+of\s+kenya|kenya)$/i,
+        /^(?:republic\s+of\s+rwanda|government\s+of\s+rwanda|rwanda)$/i,
+        /^(?:republic\s+of\s+uganda|government\s+of\s+uganda|uganda)$/i,
+        /^(?:united\s+republic\s+of\s+tanzania|government\s+of\s+tanzania|tanzania)$/i,
+        /^(?:federal\s+republic\s+of\s+nigeria|government\s+of\s+nigeria|nigeria)$/i,
+        /^(?:federal\s+democratic\s+republic\s+of\s+ethiopia|government\s+of\s+ethiopia|ethiopia)$/i,
+        /^(?:republic\s+of\s+ghana|government\s+of\s+ghana|ghana)$/i,
+        /^(?:republic\s+of\s+south\s+africa|government\s+of\s+south\s+africa|south\s+africa)$/i,
+        /^(?:republic\s+of\s+zambia|government\s+of\s+zambia|zambia)$/i,
+        /^(?:republic\s+of\s+zimbabwe|government\s+of\s+zimbabwe|zimbabwe)$/i,
+        /^(?:republic\s+of\s+malawi|government\s+of\s+malawi|malawi)$/i,
+        /^(?:republic\s+of\s+sudan|sudan|south\s+sudan)$/i,
+        // Bare document shell / procurement category headings
+        /^(?:request\s+for\s+proposals?|rfp|rfq|request\s+for\s+quotations?|invitation\s+(?:to|for)\s+bids?|ifb)(?:\s*[\(\[]?(?:rfp|rfq|ifb)[\)\]]?)?$/i,
+        /^(?:request\s+for\s+(?:expressions?\s+of\s+interest|eoi)|expressions?\s+of\s+interest|eoi|call\s+for\s+expressions?\s+of\s+interest)(?:\s*[\(\[]?eoi[\)\]]?)?$/i,
+        /^(?:call\s+for\s+(?:proposals?|applications?|concept\s+notes?))(?:\s*[\(\[]?(?:cfp|cfcn|rfp)[\)\]]?)?$/i,
+        /^(?:tender\s+document|bidding\s+document|standard\s+bidding\s+document|notice\s+of\s+tender|tender\s+notice)$/i,
+        /^(?:specific\s+procurement\s+notice|general\s+procurement\s+notice|procurement\s+notice|project-related\s+procurement|project\s+procurement)$/i,
+        /^(?:consultancy\s+services?|consulting\s+services?|provision\s+of\s+services?|terms\s+of\s+reference|tor)$/i,
+        /^(?:\(?eoi\)?\s*[-–—:]\s*)?provision\s+of\s+services?$/i,
+        /^(?:request\s+for\s+proposal\s+for\s+consulting\s+firms?|request\s+for\s+proposals?\s+for\s+consulting\s+services?)$/i,
+        /^(?:microsoft\s+word\s*[-–—].*|pdf\s+document|untitled\s+document|scan\s+document|document)$/i
+    ];
+    return GENERIC_TITLE_PATTERNS.some(re => re.test(clean));
+}
+
+/**
  * REJECT NON-LISTING BOILERPLATE
  */
 
@@ -4484,7 +4896,8 @@ const NON_LISTING_TITLE_PATTERNS = [
     /[\[\(](awarded|closed)[\]\)]/i,
     /\bstatus:\s*awarded\b/i,
     // Generic search / portal navigation / directory pages
-
+    /^Funding for businesses\s*-\s*SAIGE Opportunity$/i,
+    /^Browse opportunities\s*·\s*SAIGE Opportunity$/i,
     /^search for (grants|tenders|jobs|opportunities)\b/i,
     /^opportunities\s*–\s*page\s*\d+/i,
     /^tenders in \w+$/i,
@@ -4501,13 +4914,13 @@ const NON_LISTING_TITLE_PATTERNS = [
     /^procurement\s+(?:opportunities|notices|documents?)$/i,
     // Conferences, summits, symposiums, webinars, workshops, competitions, calendars, team building
 
-    /\b(?:conference|summit|symposium|webinar|workshop|essay\s+writing|training\s+calend[ae]r|team\s+building)\b/i,
+    /\b(?:conference|summit|symposium|webinar|workshop|essay\s+writing|essay\s+contest|poster\s+contest|drawing\s+competition|training\s+calend[ae]r|team\s+building)\b/i,
     // Financial statements, annual reports, non-core facilities/canteen/taxi/security/audits
 
     /\b(?:annual\s+report|financial\s+statements?|audited\s+accounts?|audit\s+externe|external\s+audit|taxi\s+services?|cleaning\s+services?|security\s+guard|canteen|catering)\b/i,
-    // Salaried staff vacancies / non-consultancy individual roles
+    // Salaried staff vacancies / non-consultancy individual roles / internships
 
-    /\b(?:chief of staff|programme officer|program officer|finance officer|hr officer|receptionist|data entry|executive director|driver)\b/i
+    /\b(?:chief of staff|programme officer|program officer|finance officer|hr officer|receptionist|data entry|executive director|driver|internship\s+programme|internship\s+program|internship\s+opportunit(?:y|ies)|paid\s+internship|graduate\s+trainee|apprenticeship)\b/i
 ];
 function stripQueryAndHash(url) {
     return (url || '').split('#')[0].split('?')[0];
@@ -4517,6 +4930,16 @@ function looksLikeNonListingBoilerplate(title, link, listingPageUrl, description
     const trimmedTitle = (title || '').trim();
     if (NON_LISTING_TITLE_PATTERNS.some(re => re.test(trimmedTitle))) return true;
     if (listingPageUrl && stripQueryAndHash(link) === stripQueryAndHash(listingPageUrl)) return true;
+
+    // Bare government/country mastheads and generic document shells:
+    if (isBareGovernmentOrGenericTitle(trimmedTitle)) {
+        const fullContext = `${trimmedTitle} ${link || ''} ${description || ''}`.toLowerCase();
+        const hasExplicitProcurementSignal = /\b(?:rfp|rfq|tender|eoi|expressions?\s+of\s+interest|call\s+for\s+(?:proposals?|applications?|concept\s+notes?)|terms\s+of\s+reference|tor|consultanc(?:y|ies)|consulting\s+firm|grant\s+opportunit)\b/i.test(fullContext);
+        const isGenericDirectoryUrl = /\/(?:category|categories|archive|document-library|procurement-notices|consultancy-tenders|all-tenders|tenders)\/?(?:[a-z0-9_-]+\/?)*$/i.test(stripQueryAndHash(link));
+        if (!hasExplicitProcurementSignal || isGenericDirectoryUrl) {
+            return true;
+        }
+    }
     if (link) {
         // Exclude salaried employment recruitment / job vacancies across all sources
         if (/(?:were[\s_-]?hiring|we[\s_-]?are[\s_-]?hiring|job[\s_-]?vacanc(?:y|ies)|staff[\s_-]?recruitment|employment[\s_-]?opportunit|career[\s_-]?opportunit|recruitment[\s_-]?(?:notice|alert|of)|hiring[\s_-]?(?:now|for|alert|in))/i.test(link)) return true;
@@ -4608,6 +5031,13 @@ function looksLikeNonListingBoilerplate(title, link, listingPageUrl, description
         // Exclude developer hackathons, coding challenges, student ideathons, buildathons
         if (/\b(?:hackathons?|ideathons?|datathons?|buildathons?|coding\s+challenges?|developer\s+challenges?)\b/i.test(title) && !/\b(?:challenge\s+funds?|enterprise\s+challenge)\b/i.test(title)) return true;
 
+        // Exclude SAIGE Opportunity aggregator / catalog / directory root pages:
+        // Only individual opportunity slugs (e.g. saigeopportunity.org/opportunities/slug) are valid opportunities.
+        if (/https?:\/\/(?:www\.)?saigeopportunity\.org\/?(?:[?#].*)?$/i.test(link) ||
+            /https?:\/\/(?:www\.)?saigeopportunity\.org\/(?:opportunities\/?(?:\?[^#]*)?$|directory|map|readiness|organizations|account)/i.test(link)) {
+            return true;
+        }
+
         // Exclude generic search / index / directory URLs
 
         if (/\/(?:grants|tenders|jobs)\/search\b/i.test(link)) return true;
@@ -4689,7 +5119,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
 
     // Pre-AI negative filter: discard obvious civil works, railway, municipal hardware, curriculum, medical supplies, and non-agri sectors lacking seed/crop context
 
-    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban)\b/i;
+    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban|cybercriminalité|cybersecurity|cyber-security|cyber\s+security|réalité\s+augmentée|augmented\s+reality|virtual\s+reality|réalité\s+virtuelle|software\s+development|développement\s+logiciel|data\s+centre|data\s+center|réseau\s+informatique|csu\s+equipment|equipamento\s+necessario\s+para\s+o\s+csu|computer\s+lab|fibre\s+optic|cloud\s+computing|data\s+science\s+curriculum)\b/i;
     if (NON_AGRI_CIVIL_WORKS_REGEX.test(combinedText)) {
         const hasSeedOrCrop = CORE_SEED_KEYWORDS.some(k => combinedText.includes(k.toLowerCase())) || /\b(seed|variety|breeder|germplasm|crop|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|gmo|biosafety|biotech|transgenic|agtech|agritech|agri[-\s]?tech)s?\b/i.test(combinedText);
         if (!hasSeedOrCrop) {
@@ -4752,12 +5182,18 @@ function resetQuotaGuards() {
     props.deleteProperty('GEMINI_QUOTA_DATE');
     props.deleteProperty('GEMINI_QUOTA_COUNT');
 
+    const cache = (typeof CacheService !== 'undefined' && CacheService.getScriptCache) ? CacheService.getScriptCache() : null;
     (CONFIG.RENDER_PROVIDERS || []).forEach(provider => {
         const safeName = provider.name.replace(/[^A-Za-z0-9]+/g, '_').toUpperCase();
         props.deleteProperty(`RENDER_${safeName}_COUNT`);
         props.deleteProperty(`RENDER_${safeName}_PERIOD`);
+        if (cache) {
+            cache.remove('EXHAUSTED_' + provider.name);
+            const pool = getRenderProviderKeyPool(provider);
+            (pool || []).forEach(k => cache.remove('DEAD_RENDER_KEY_' + k));
+        }
     });
-    Logger.log('Gemini daily quota counter, discovery reserve, and all render-provider credit counters have been reset.');
+    Logger.log('Gemini daily quota counter, discovery reserve, and all render-provider credit counters and cache blocks have been reset.');
 }
 
 function sampleRoundRobin(perSourceBuckets, overallCap, sheetLinks, sheetTitleKeys) {
@@ -5137,7 +5573,7 @@ let renderCircuitBreakerTripped = false;
 function fetchRenderedHtml(targetUrl) {
     if (renderCircuitBreakerTripped) return null;
     if (targetUrl && targetUrl.includes('ifad.org')) return null; // Cloudflare-heavy domain; use Serper fallback
-    const cache = CacheService.getScriptCache();
+    const cache = (typeof CacheService !== 'undefined' && CacheService.getScriptCache) ? CacheService.getScriptCache() : null;
     let anyConfigured = false;
     let anyHadCredit = false;
     for (const provider of CONFIG.RENDER_PROVIDERS) {
@@ -5155,6 +5591,13 @@ function fetchRenderedHtml(targetUrl) {
             const keyPreview = apiKey.length > 8
                 ? (apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4))
                 : 'Key #' + (activeIdx + 1);
+
+            // Fast-path: Skip persistently blacklisted keys (e.g. 401 unauthorized / expired keys cached with 24h TTL)
+            if (cache && cache.get('DEAD_RENDER_KEY_' + apiKey)) {
+                _renderActiveKeyIndices[provider.name] = activeIdx + 1;
+                continue;
+            }
+
             anyHadCredit = true;
             const renderUrl = provider.buildUrl(apiKey, targetUrl);
 
@@ -5168,6 +5611,9 @@ function fetchRenderedHtml(targetUrl) {
                     const isBlockOrLimit = (responseCode === 403 || responseCode === 429 || responseCode === 520);
                     if (isCreditExhausted || isKeyInvalid || isBlockOrLimit) {
                         Logger.log(`[Render Key Exhausted] ${provider.name} key ${keyPreview} failed (HTTP ${responseCode}). Rotating to next key (${activeIdx + 1}/${pool.length})...`);
+                        if (cache && (isKeyInvalid || isCreditExhausted)) {
+                            cache.put('DEAD_RENDER_KEY_' + apiKey, 'true', 86400); // 24-hour persistent blacklist
+                        }
                         _renderActiveKeyIndices[provider.name] = activeIdx + 1;
                         continue;
                     }
@@ -5470,6 +5916,58 @@ function getSheetAccessEmails(spreadsheet) {
     } catch (e) { }
 
     return Array.from(emails);
+}
+
+/**
+ * AUTOMATED SYSTEM HEALTH & ADMIN ALERTING
+ * Dispatches high-priority system alerts (e.g. Serper key depletion, Gemini API quota limits,
+ * Discovery Guard trip) to configured script administrators and sheet collaborators.
+ * Throttled to at most once per 12 hours per alert topic to prevent inbox flooding.
+ */
+function notifyAdminAlert(subject, body) {
+    try {
+        const cache = (typeof CacheService !== 'undefined' && CacheService.getScriptCache) ? CacheService.getScriptCache() : null;
+        const alertKey = 'ALERT_' + subject.replace(/[^A-Za-z0-9_]/g, '_').substring(0, 50);
+        if (cache && cache.get(alertKey)) return;
+        if (cache) cache.put(alertKey, 'true', 43200); // 12-hour alert deduplication
+
+        let ss = null;
+        try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { }
+        const recipients = ss ? getSheetAccessEmails(ss) : [];
+        const props = PropertiesService.getScriptProperties();
+        const configuredAlertEmails = props.getProperty('ALERT_EMAILS');
+        if (configuredAlertEmails) {
+            configuredAlertEmails.split(/[,;\s]+/).forEach(em => {
+                if (em && em.includes('@') && !recipients.includes(em.trim().toLowerCase())) {
+                    recipients.push(em.trim().toLowerCase());
+                }
+            });
+        }
+        if (!recipients.length) {
+            try {
+                const userEmail = Session.getEffectiveUser().getEmail();
+                if (userEmail && userEmail.includes('@')) recipients.push(userEmail);
+            } catch (e) { }
+        }
+
+        if (recipients.length > 0) {
+            const sheetUrl = ss ? ss.getUrl() : '';
+            recipients.forEach(recipient => {
+                try {
+                    MailApp.sendEmail({
+                        to: recipient,
+                        subject: `[RFP Hunter Alert] ${subject}`,
+                        body: `RFP Hunter System Health Alert:\n\n${body}\n\nTimestamp: ${new Date().toISOString()}\nSpreadsheet: ${sheetUrl || 'N/A'}`
+                    });
+                } catch (sendErr) {
+                    Logger.log(`[Admin Alert] Failed to send email to ${recipient}: ${sendErr.message}`);
+                }
+            });
+            Logger.log(`[Admin Alert] Dispatched "${subject}" alert to ${recipients.join(', ')}`);
+        }
+    } catch (err) {
+        Logger.log(`[Admin Alert Error] ${err.message}`);
+    }
 }
 
 function sendEmailAlertsForHighPriorityMatches(matches, sheet) {
