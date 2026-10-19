@@ -1,11 +1,19 @@
 /**
  * ==============================================================================
- * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.27 (ENTERPRISE PRODUCTION EDITION)
+ * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.28 (ENTERPRISE PRODUCTION EDITION)
  * ==============================================================================
  *
  * FIRM PROFILE: Agri Experience Ltd (Nairobi, Kenya)
  * Primary Focus: Seed Systems, AgTech, Policy & Regulatory Advisory, and Agricultural
  * Transformation across 21+ Sub-Saharan African Countries.
+ *
+ * MAJOR ENHANCEMENTS IN VERSION 5.28:
+ *  1. RESILIENT CACHESERVICE TTL CAPPING (GAS 21,600s COMPLIANCE):
+ *     - Introduced safeCachePut helper enforcing Google Apps Script's strict 21,600s (6-hour) maximum TTL ceiling.
+ *     - Prevents silent Cache.put() exceptions that previously broke render key rotation and blocked admin alert emails.
+ *  2. BULLETPROOF RENDER KEY POOL ROTATION:
+ *     - Advances active key index before caching dead keys, ensuring key rotation continues across the entire pool
+ *       even if one key is unauthorized (401), exhausted, or throws a network timeout.
  *
  * MAJOR ENHANCEMENTS IN VERSION 5.27:
  *  1. PRE-AI PROCUREMENT BANNER & RAW URL SUPPRESSION:
@@ -89,7 +97,7 @@
  *
  *  2. PERSISTENT DEAD-KEY BLACKLISTING (P2):
  *     - In fetchRenderedHtml, keys returning HTTP 401 (Unauthorized/Expired) are cached in
- *       CacheService with a 24-hour TTL (DEAD_RENDER_KEY_...).
+ *       CacheService with a 6-hour TTL (DEAD_RENDER_KEY_...) adhering strictly to GAS limits.
  *     - Subsequent runs bypass dead render keys in 0.0ms, saving 30+ seconds of wait latency.
  *
  *  3. STAGNANT PORTAL AUTO-PIVOT (P3):
@@ -5309,9 +5317,13 @@ function resetQuotaGuards() {
         props.deleteProperty(`RENDER_${safeName}_COUNT`);
         props.deleteProperty(`RENDER_${safeName}_PERIOD`);
         if (cache) {
-            cache.remove('EXHAUSTED_' + provider.name);
-            const pool = getRenderProviderKeyPool(provider);
-            (pool || []).forEach(k => cache.remove('DEAD_RENDER_KEY_' + k));
+            try {
+                cache.remove('EXHAUSTED_' + provider.name);
+                const pool = getRenderProviderKeyPool(provider);
+                (pool || []).forEach(k => cache.remove('DEAD_RENDER_KEY_' + k));
+            } catch (e) {
+                Logger.log(`[Cache Warning] Failed to clear render provider cache: ${e.message}`);
+            }
         }
     });
     Logger.log('Gemini daily quota counter, discovery reserve, and all render-provider credit counters and cache blocks have been reset.');
@@ -5690,6 +5702,23 @@ function getRenderProviderKeyPool(provider) {
     return keys;
 }
 
+/**
+ * Safely writes a key-value pair to CacheService, guaranteeing that the expiration
+ * strictly obeys the Google Apps Script 21,600s (6-hour) maximum TTL ceiling, and
+ * absorbing transient cache errors so they never interrupt execution or key rotation.
+ */
+function safeCachePut(cache, key, value, ttlSeconds) {
+    if (!cache || !key) return false;
+    try {
+        const safeTtl = Math.min(Math.max(1, Number(ttlSeconds) || 600), 21600);
+        cache.put(key, value, safeTtl);
+        return true;
+    } catch (e) {
+        Logger.log(`[Cache Warning] Failed to cache key "${key}": ${e.message}`);
+        return false;
+    }
+}
+
 let renderCircuitBreakerTripped = false;
 function fetchRenderedHtml(targetUrl) {
     if (renderCircuitBreakerTripped) return null;
@@ -5699,9 +5728,11 @@ function fetchRenderedHtml(targetUrl) {
     let anyHadCredit = false;
     for (const provider of CONFIG.RENDER_PROVIDERS) {
         // Fast-path: Check if this provider is cached as completely exhausted for the cycle
-        if (cache && cache.get('EXHAUSTED_' + provider.name)) {
-            continue;
-        }
+        let isProviderExhausted = false;
+        try {
+            if (cache && cache.get('EXHAUSTED_' + provider.name)) isProviderExhausted = true;
+        } catch (e) { }
+        if (isProviderExhausted) continue;
 
         const pool = getRenderProviderKeyPool(provider);
         if (!pool || pool.length === 0) continue;
@@ -5713,8 +5744,13 @@ function fetchRenderedHtml(targetUrl) {
                 ? (apiKey.substring(0, 4) + '...' + apiKey.substring(apiKey.length - 4))
                 : 'Key #' + (activeIdx + 1);
 
-            // Fast-path: Skip persistently blacklisted keys (e.g. 401 unauthorized / expired keys cached with 24h TTL)
-            if (cache && cache.get('DEAD_RENDER_KEY_' + apiKey)) {
+            // Fast-path: Skip persistently blacklisted keys (e.g. 401 unauthorized / expired keys cached with 6h TTL)
+            let isBlacklisted = false;
+            try {
+                if (cache && cache.get('DEAD_RENDER_KEY_' + apiKey)) isBlacklisted = true;
+            } catch (e) { }
+
+            if (isBlacklisted) {
                 _renderActiveKeyIndices[provider.name] = activeIdx + 1;
                 continue;
             }
@@ -5732,14 +5768,15 @@ function fetchRenderedHtml(targetUrl) {
                     const isBlockOrLimit = (responseCode === 403 || responseCode === 429 || responseCode === 520);
                     if (isCreditExhausted || isKeyInvalid || isBlockOrLimit) {
                         Logger.log(`[Render Key Exhausted] ${provider.name} key ${keyPreview} failed (HTTP ${responseCode}). Rotating to next key (${activeIdx + 1}/${pool.length})...`);
-                        if (cache && (isKeyInvalid || isCreditExhausted)) {
-                            cache.put('DEAD_RENDER_KEY_' + apiKey, 'true', 86400); // 24-hour persistent blacklist
-                        }
                         _renderActiveKeyIndices[provider.name] = activeIdx + 1;
+                        if (isKeyInvalid || isCreditExhausted) {
+                            safeCachePut(cache, 'DEAD_RENDER_KEY_' + apiKey, 'true', 21600); // 6-hour persistent blacklist (GAS CacheService max TTL)
+                        }
                         continue;
                     }
 
                     Logger.log(`[Render] ${provider.name} HTTP ${responseCode}. Preview: ${bodyPreview}`);
+                    _renderActiveKeyIndices[provider.name] = activeIdx + 1;
                     break;
                 }
 
@@ -5754,13 +5791,14 @@ function fetchRenderedHtml(targetUrl) {
                 return html;
             } catch (e) {
                 Logger.log(`[Render] ${provider.name} request failed: ${e.message}`);
+                _renderActiveKeyIndices[provider.name] = activeIdx + 1;
                 break;
             }
         }
 
         if ((_renderActiveKeyIndices[provider.name] || 0) >= pool.length) {
             Logger.log(`[Render Pool Exhausted] All ${pool.length} key(s) for ${provider.name} are exhausted.`);
-            if (cache) cache.put('EXHAUSTED_' + provider.name, 'true', 86400);
+            safeCachePut(cache, 'EXHAUSTED_' + provider.name, 'true', 21600);
         }
     }
 
@@ -6089,8 +6127,12 @@ function notifyAdminAlert(subject, body) {
     try {
         const cache = (typeof CacheService !== 'undefined' && CacheService.getScriptCache) ? CacheService.getScriptCache() : null;
         const alertKey = 'ALERT_' + subject.replace(/[^A-Za-z0-9_]/g, '_').substring(0, 50);
-        if (cache && cache.get(alertKey)) return;
-        if (cache) cache.put(alertKey, 'true', 43200); // 12-hour alert deduplication
+        if (cache) {
+            try {
+                if (cache.get(alertKey)) return;
+            } catch (e) { }
+        }
+        safeCachePut(cache, alertKey, 'true', 21600); // 6-hour alert deduplication (GAS CacheService max TTL)
 
         let ss = null;
         try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { }
