@@ -1,11 +1,16 @@
 /**
  * ==============================================================================
- * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.26 (ENTERPRISE PRODUCTION EDITION)
+ * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.27 (ENTERPRISE PRODUCTION EDITION)
  * ==============================================================================
  *
  * FIRM PROFILE: Agri Experience Ltd (Nairobi, Kenya)
  * Primary Focus: Seed Systems, AgTech, Policy & Regulatory Advisory, and Agricultural
  * Transformation across 21+ Sub-Saharan African Countries.
+ *
+ * MAJOR ENHANCEMENTS IN VERSION 5.27:
+ *  1. PRE-AI PROCUREMENT BANNER & RAW URL SUPPRESSION:
+ *     - Automatically rejects generic portal policy banners (e.g. "Open and transparent procurement process")
+ *       and titles embedding raw external web URLs in parentheses pre-AI, saving Gemini evaluation budget.
  *
  * MAJOR ENHANCEMENTS IN VERSION 5.26:
  *  1. SAIGE NEXT.JS RSC LINK PARSER FIX:
@@ -5024,8 +5029,10 @@ const NON_LISTING_TITLE_PATTERNS = [
     /^gpn(?:\s*[-–—:].*)?$/i,
     /^procurement\s+notice(?:\s*\([a-z0-9\s]+\))?$/i,
     /^project-related\s+procurement$/i,
-    /^project\s+procurement$/i,
     /^procurement\s+(?:opportunities|notices|documents?)$/i,
+    // Generic procurement process guidelines, portal policy banners, or titles embedding raw URLs
+    /^(?:open\s+and\s+transparent\s+procurement|procurement\s+guidelines?|how\s+to\s+bid|tendering\s+procedures?|procurement\s+process)\b/i,
+    /\((?:https?:\/\/)?(?:www\.)?[a-z0-9_-]+\.[a-z]{2,}\/?[^)]*\)/i,
     // Conferences, summits, symposiums, webinars, workshops, competitions, calendars, team building
 
     /\b(?:conference|summit|symposium|webinar|workshop|essay\s+writing|essay\s+contest|poster\s+contest|drawing\s+competition|training\s+calend[ae]r|team\s+building)\b/i,
