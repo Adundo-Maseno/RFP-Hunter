@@ -1,11 +1,25 @@
 /**
  * ==============================================================================
- * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.25 (ENTERPRISE PRODUCTION EDITION)
+ * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.26 (ENTERPRISE PRODUCTION EDITION)
  * ==============================================================================
  *
  * FIRM PROFILE: Agri Experience Ltd (Nairobi, Kenya)
  * Primary Focus: Seed Systems, AgTech, Policy & Regulatory Advisory, and Agricultural
  * Transformation across 21+ Sub-Saharan African Countries.
+ *
+ * MAJOR ENHANCEMENTS IN VERSION 5.26:
+ *  1. SAIGE NEXT.JS RSC LINK PARSER FIX:
+ *     - Fixed off-by-one card-to-link binding by capturing href and card body as atomic units in both
+ *       Next.js RSC streams and HTML, eliminating misdirected URLs.
+ *  2. SUBSTANTIVE & COUNTRY-AWARE FUZZY TITLE DEDUPLICATION:
+ *     - Stripped procurement stopwords and introduced African country separation in isFuzzyTitleDuplicate,
+ *       stopping multi-post duplicate syndications (e.g. AFSA, NBA) while preserving distinct country tenders.
+ *  3. TRUNCATED SNIPPET TITLE RESOLVER:
+ *     - Detects search snippet titles ending in ellipses ("...") and replaces them with complete,
+ *       untruncated AI-extracted specific opportunity titles.
+ *  4. MEDICAL SECTOR & IN-PLACE LEGACY SHEET AUDITOR:
+ *     - Enforces immediate rejection for medical/health tenders lacking agricultural focus, and adds
+ *       an automated audit in updateExpiredProposalsStatus to retire legacy pre-v5.22 contradictions.
  *
  * MAJOR ENHANCEMENTS IN VERSION 5.25:
  *  1. PRE-AI AUTOMOTIVE & NURSERY HARDWARE DEFENSE:
@@ -1160,7 +1174,7 @@ function runRfpTrackerV4() {
             evalResult.isOpen = false;
         }
 
-        const NON_PROCUREMENT_SUMMARY_REGEX = /\b(?:rather than an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|not an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|institutional document page(?: rather than)?|broad (?:[a-z]+\s+)?(?:institutional|organizational) document page|lacks specific submission details|not a current open solicitation|not an open solicitation|not an actionable (?:procurement|solicitation|tender|opportunity)|closed as a business opportunity|event rather than a (?:procurement|tender|solicitation)|hackathon event rather than|social media post discussing|vendor offering services rather than|personal social media advertisement|personal service promotional|personal services? offering|salaried\s+(?:employment|job|recruitment)|job\s+vacanc(?:y|ies)|employee\s+recruitment|we(?:\'re|[\s_-]?are)\s+hiring|contest\s+providing\s+cash\s+prizes|cash\s+prizes?\s+and\s+mentorship)\b/i;
+        const NON_PROCUREMENT_SUMMARY_REGEX = /\b(?:rather than an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|not an active(?:, actionable)? (?:expression of interest|solicitation|procurement|tender|grant|notice|opportunity)|institutional document page(?: rather than)?|broad (?:[a-z]+\s+)?(?:institutional|organizational) document page|lacks specific submission details|not a current open solicitation|not an open solicitation|not an actionable (?:procurement|solicitation|tender|opportunity)|closed as a business opportunity|event rather than a (?:procurement|tender|solicitation)|hackathon event rather than|social media post discussing|vendor offering services rather than|personal social media advertisement|personal service promotional|personal services? offering|salaried\s+(?:employment|job|recruitment)|job\s+vacanc(?:y|ies)|employee\s+recruitment|we(?:\'re|[\s_-]?are)\s+hiring|contest\s+providing\s+cash\s+prizes|cash\s+prizes?\s+and\s+mentorship|focuses\s+(?:primarily\s+)?on\s+the\s+medical\s+sector|medical\s+sector\s+rather\s+than\s+agriculture|completely\s+unrelated\s+to\s+agriculture|outside\s+the\s+firm(?:'s)?\s+agricultural\s+scope|unrelated\s+to\s+agricultural\s+consulting)\b/i;
         let isAiNonProcurementSummary = NON_PROCUREMENT_SUMMARY_REGEX.test(evalResult.summary || '');
         if (isAiNonProcurementSummary) {
             // Guard against false-negative AI document hallucinations for official MDB/donor solicitations
@@ -1195,6 +1209,7 @@ function runRfpTrackerV4() {
         const isRawFileTitle = /\.(?:pdf|docx?|xlsx?)$/i.test(item.title) ||
             (!/\s/.test(item.title) && /(?:[-_][a-zA-Z0-9]+){2,}/.test(item.title)) ||
             /\b(?:[A-Za-z]{2,}[-_]){2,}[A-Za-z]{2,}\b/.test(item.title);
+        const isTruncatedTitle = /[\.\u2026]{2,}$/.test(item.title) || /\b(?:read more|click here)\b/i.test(item.title);
 
         if (isRoundupCandidate) {
             if (evalResult.specificOpportunityTitle && evalResult.specificOpportunityTitle.trim()) {
@@ -1204,9 +1219,9 @@ function runRfpTrackerV4() {
                 item.title = `[Roundup] ${item.title.replace(/\s*\|\s*(?:LinkedIn|GrantEdge Global|Facebook).*$/i, '').trim()}`;
             }
             Logger.log(`[Roundup Alignment] Aligned multi-opportunity title: "${item.title}"`);
-        } else if (isGenericTitle || isRawFileTitle) {
+        } else if (isGenericTitle || isRawFileTitle || isTruncatedTitle) {
             if (evalResult.specificOpportunityTitle && evalResult.specificOpportunityTitle.trim() && !isBareGovernmentOrGenericTitle(evalResult.specificOpportunityTitle)) {
-                Logger.log(`[Title Extraction] Replaced ${isGenericTitle ? 'generic masthead' : 'raw document'} title "${item.title}" with substantive AI-extracted title: "${evalResult.specificOpportunityTitle.trim()}"`);
+                Logger.log(`[Title Extraction] Replaced ${isGenericTitle ? 'generic masthead' : isRawFileTitle ? 'raw document' : 'truncated search snippet'} title "${item.title}" with substantive AI-extracted title: "${evalResult.specificOpportunityTitle.trim()}"`);
                 item.title = evalResult.specificOpportunityTitle.trim();
             }
         }
@@ -4047,15 +4062,28 @@ function fetchSaigeOpportunities(feed, existingLinks, existingTitleKeys, bucket,
         const body = response ? response.getContentText() : '';
         if (code !== 200 || !body || body.includes('Just a moment...')) return;
 
-        // Unified Card Extraction: Splits body into isolated opp-card blocks
-        // Handles both Next.js RSC JSON chunks and server-rendered HTML blocks without regex bleeding
-        const rawBlocks = body.split(/(?:\\"className\\":\\"opp-card\\"|<a[^>]+class=["'][^"']*opp-card)/i);
-        for (let bIdx = 1; bIdx < rawBlocks.length; bIdx++) {
-            const b = rawBlocks[bIdx];
-            const hrefM = b.match(/href[\\"=:\s]+(\/opportunities\/[a-z0-9_-]+)/i);
-            if (!hrefM) continue;
-            const path = hrefM[1];
-            if (seenPaths.has(path)) continue;
+        // Unified Card Extraction: Extracts cards along with their accurate href
+        // Handles both Next.js RSC JSON chunks and server-rendered HTML blocks without off-by-one bleeding
+        const cards = [];
+        // Pattern A: Next.js RSC JSON format
+        const rscCardRe = /(?:\\"href\\"|"href")\s*:\s*(?:\\"|")(\/opportunities\/[a-z0-9_-]+)(?:\\"|")[\s\S]*?(?:\\"className\\"|"className")\s*:\s*(?:\\"|")opp-card(?:\\"|")([\s\S]*?)(?=(?:\\"href\\"|"href")\s*:\s*(?:\\"|")\/opportunities\/[a-z0-9_-]+(?:\\"|")[\s\S]*?(?:\\"className\\"|"className")\s*:\s*(?:\\"|")opp-card|$)/gi;
+        let m;
+        while ((m = rscCardRe.exec(body)) !== null) {
+            cards.push({ path: m[1], b: m[2] });
+        }
+
+        // Pattern B: Server-rendered HTML fallback
+        if (cards.length === 0) {
+            const htmlCardRe = /<a[^>]+(?:class=["'][^"']*opp-card[^"']*["'][^>]*href=["'](\/opportunities\/[a-z0-9_-]+)["']|href=["'](\/opportunities\/[a-z0-9_-]+)["'][^>]*class=["'][^"']*opp-card)[^>]*>([\s\S]*?)<\/a>/gi;
+            while ((m = htmlCardRe.exec(body)) !== null) {
+                cards.push({ path: m[1] || m[2], b: m[3] });
+            }
+        }
+
+        for (let bIdx = 0; bIdx < cards.length; bIdx++) {
+            const path = cards[bIdx].path;
+            const b = cards[bIdx].b;
+            if (!path || seenPaths.has(path)) continue;
 
             let title = null;
             const titleJson = b.match(/opp-title[\\"=:\s,\w]+children[\\"=:\s]+(?:\\"|")((?:[^"\\\r\n]|\\.)*?)(?:\\"|")/i);
@@ -4182,27 +4210,46 @@ function updateExpiredProposalsStatus(sheet) {
     try {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
-        const range = sheet.getRange(2, 5, lastRow - 1, 2); // Col 5: Status, Col 6: Closing Date
-
+        // Range spans Col 3 (Title) to Col 10 (Executive Summary) = 8 columns
+        const range = sheet.getRange(2, 3, lastRow - 1, 8);
         const values = range.getValues();
         const today = new Date().setHours(0, 0, 0, 0);
         let updatedCount = 0;
-        for (let i = 0; i < values.length; i++) {
-            const status = values[i][0];
-            const closing = values[i][1];
-            if (status === 'OPEN' && closing && closing !== 'Not Specified') {
-                const closingDate = new Date(closing);
-                if (!isNaN(closingDate.getTime()) && closingDate.getTime() < today) {
-                    values[i][0] = 'CLOSED / EXPIRED';
 
+        for (let i = 0; i < values.length; i++) {
+            const title = String(values[i][0] || '');
+            const status = values[i][2]; // Col 5: Status
+            const closing = values[i][3]; // Col 6: Closing Date
+            const summary = String(values[i][7] || ''); // Col 10: Executive Summary
+
+            if (status === 'OPEN') {
+                // 1. Check for expired deadline
+                if (closing && closing !== 'Not Specified') {
+                    const closingDate = new Date(closing);
+                    if (!isNaN(closingDate.getTime()) && closingDate.getTime() < today) {
+                        values[i][2] = 'CLOSED / EXPIRED';
+                        updatedCount++;
+                        continue;
+                    }
+                }
+
+                // 2. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds)
+                const isLegacyContradiction = /\b(?:personal social media advertisement|vendor offering services rather than|focuses (?:primarily )?on the medical sector|medical sector rather than agriculture|completely unrelated to agriculture|homestead garden[-_\s]+crop seeds)\b/i.test(summary) ||
+                    /\b(?:homestead garden[-_\s]+crop seeds)\b/i.test(title);
+
+                if (isLegacyContradiction) {
+                    values[i][2] = 'CLOSED / EXPIRED';
+                    values[i][4] = 'NO-GO'; // Col 7: AI Recommendation
+                    values[i][5] = 0;       // Col 8: Match Score (%)
                     updatedCount++;
+                    Logger.log(`[Maintenance] Retired legacy contradictory notice in row ${i + 2}: "${title}"`);
                 }
             }
         }
 
         if (updatedCount > 0) {
             range.setValues(values);
-            Logger.log(`[Maintenance] Automatically updated ${updatedCount} expired notice(s) to CLOSED / EXPIRED in Active sheet.`);
+            Logger.log(`[Maintenance] Automatically updated ${updatedCount} expired/legacy notice(s) in Active sheet.`);
         }
     } catch (e) {
         Logger.log('[Maintenance] Note on updateExpiredProposalsStatus: ' + e.message);
@@ -4932,6 +4979,8 @@ function formatCleanOpportunityTitle(rawTitle) {
     let clean = String(rawTitle).trim();
     clean = clean.replace(/^\[(?:pdf|doc|docx)\]\s*/i, '');
     clean = clean.replace(/\.(?:pdf|docx?|xlsx?|txt|rtf)$/i, '');
+    clean = clean.replace(/\s*[-–—·]\s*(?:closes? in \d+ days?|closing soon).*$/i, '');
+    clean = clean.replace(/\s*\|\s*(?:linkedin|grantedge global|facebook|[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s*(?:\.\.\.|…)).*$/i, '');
     try { clean = decodeURIComponent(clean); } catch (e) {}
     if (!/\s/.test(clean) && /(?:[-_][a-zA-Z0-9]+){2,}/.test(clean)) {
         clean = clean.replace(/[-_]+/g, ' ');
@@ -5787,38 +5836,78 @@ function extractProcurementRefCode(link, title) {
     return match ? match[1].toLowerCase().replace(/[-_]/g, '') : null;
 }
 
+const DUP_STOPWORDS = new Set(['for', 'and', 'the', 'with', 'from', 'into', 'under', 'call', 'proposals', 'proposal', 'eoi', 'rfp', 'rfq', 'tor', 'consultancy', 'consultant', 'services', 'service', 'study', 'seeks', 'seeking', 'notice', 'tender', 'tenders', 'expression', 'expressions', 'interest', 'applications', 'application', 'grant', 'grants', 'opportunity', 'opportunities', 'invitation', 'bids', 'bid', 'document', 'project']);
+
+function extractCountryTokenFromKey(text) {
+    if (!text || typeof AFRICAN_COUNTRIES === 'undefined') return null;
+    const lower = String(text).toLowerCase();
+    for (let i = 0; i < AFRICAN_COUNTRIES.length; i++) {
+        const c = AFRICAN_COUNTRIES[i];
+        if (new RegExp('(?:^|[^a-z])' + escapeRegex(c) + '(?:$|[^a-z])', 'i').test(lower)) {
+            return c;
+        }
+    }
+    return null;
+}
+
 function normalizeTitleKey(title) {
     let clean = String(title || '').toLowerCase();
-    clean = clean.replace(/^(?:call for (?:expressions? of interest|eoi|proposals?|concept notes?|applications?)(?:\s*\([a-z0-9\s]+\))?|request for (?:proposals?|quotations?|concept notes?|rfp|rfq)(?:\s*\([a-z0-9\s]+\))?|expressions? of interest(?:\s*\([a-z0-9\s]+\))?|eoi|rfp|rfq|rfcn|tor|terms of reference(?:\s*for)?|invitation to bid|consultancy services?(?:\s*for)?|consultancy for)\s*[:\-\–\—\.\/]?\s*/gi, '');
+    clean = clean.replace(/\.(?:pdf|docx?|xlsx?)$/i, '');
+    clean = clean.replace(/\s*[-–—·]\s*(?:closes? in \d+ days?|closing soon).*$/i, '');
+    clean = clean.replace(/\s*\|\s*(?:linkedin|grantedge global|facebook).*$/i, '');
+    try { clean = decodeURIComponent(clean); } catch (e) {}
+    if (!/\s/.test(clean) && /(?:[-_][a-zA-Z0-9]+){2,}/.test(clean)) {
+        clean = clean.replace(/[-_]+/g, ' ');
+    }
+    clean = clean.replace(/^(?:call for (?:expressions? of interest|eoi|proposals?|concept notes?|applications?)(?:\s*\([a-z0-9\s]+\))?|request for (?:proposals?|quotations?|concept notes?|rfp|rfq)(?:\s*\([a-z0-9\s]+\))?|expressions? of interest(?:\s*\([a-z0-9\s]+\))?|eoi|rfp|rfq|rfcn|tor|terms of reference(?:\s*for)?|invitation to (?:bid|tender)|tender(?:\s+\d{4})?|consultancy services?(?:\s*for)?|consultancy for)\s*[:\-\–\—\.\/]?\s*/gi, '');
     return clean.replace(/[^a-z0-9]+/g, ' ').trim().substring(0, 150);
 }
 
 /**
  * Fuzzy title duplicate detector: matches exact keys, substantive phrase containment,
- * and high token similarity (>= 80%) to skip already logged opportunities.
+ * and high token similarity (>= 75% on topical keywords) to skip already logged opportunities,
+ * guarded by country check so distinct national assignments are never merged.
  */
 
 function isFuzzyTitleDuplicate(newKey, existingKeys) {
     if (!newKey || !existingKeys) return false;
     if (existingKeys.has(newKey)) return true;
-    if (newKey.length < 15) return false;
+    if (newKey.length < 12) return false;
+
+    const country1 = extractCountryTokenFromKey(newKey);
+
     for (const existing of existingKeys) {
-        if (existing.length < 15) continue;
+        if (existing.length < 12) continue;
+
+        // Country Guard: If both keys mention a distinct African country, they represent separate national assignments
+        const country2 = extractCountryTokenFromKey(existing);
+        if (country1 && country2 && country1 !== country2) {
+            continue;
+        }
 
         // Direct phrase containment (e.g. "rwanda taat technical advisor seed systems" contains "taat technical advisor seed systems")
-
         if (existing.includes(newKey) || newKey.includes(existing)) {
             return true;
         }
 
-        // Substantive token overlap check
-
-        const t1 = new Set(newKey.split(' ').filter(w => w.length > 2));
-        const t2 = new Set(existing.split(' ').filter(w => w.length > 2));
-        if (t1.size >= 4 && t2.size >= 4) {
+        // Substantive token overlap check (stripping common procurement noise words)
+        const t1Sub = new Set(newKey.split(' ').filter(w => w.length > 2 && !DUP_STOPWORDS.has(w)));
+        const t2Sub = new Set(existing.split(' ').filter(w => w.length > 2 && !DUP_STOPWORDS.has(w)));
+        if (t1Sub.size >= 3 && t2Sub.size >= 3) {
             let common = 0;
-            t1.forEach(word => { if (t2.has(word)) common++; });
-            if (common / Math.min(t1.size, t2.size) >= 0.8) {
+            t1Sub.forEach(w => { if (t2Sub.has(w)) common++; });
+            if (common / Math.min(t1Sub.size, t2Sub.size) >= 0.75) {
+                return true;
+            }
+        }
+
+        // Broad token overlap check for general titles
+        const t1All = new Set(newKey.split(' ').filter(w => w.length > 2));
+        const t2All = new Set(existing.split(' ').filter(w => w.length > 2));
+        if (t1All.size >= 4 && t2All.size >= 4) {
+            let common = 0;
+            t1All.forEach(w => { if (t2All.has(w)) common++; });
+            if (common / Math.min(t1All.size, t2All.size) >= 0.80) {
                 return true;
             }
         }
