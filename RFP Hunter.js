@@ -5504,7 +5504,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
             if (feedStats) { feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
             return;
         }
-        const isSocialNoise = /\b(?:project\s+staff\s+recruitment|recruitment\s+of\s+staff|internal\s+vacancy|job\s+vacanc(?:y|ies)|staff\s+recruitment|hiring\s+for|hiring\s+in|we\s+are\s+hiring|we're\s+hiring|were[\s_-]?hiring|hiring[\s_-]?(?:now|alert|notice)|salaried\s+position|job\s+alert|brics\s+backing|standards\s+organisation\s+of\s+nigeria\s+-\s+son)\b/i.test(combinedText) ||
+        const isSocialNoise = /\b(?:project\s+staff\s+recruitment|recruitment\s+of\s+staff|internal\s+vacancy|job\s+vacanc(?:y|ies)|staff\s+recruitment|hiring\s+for|hiring\s+in|we\s+are\s+hiring|we're\s+hiring|were[\s_-]?hiring|hiring[\s_-]?(?:now|alert|notice)|salaried\s+position|job\s+alert|brics\s+backing|standards\s+organisation\s+of\s+nigeria\s+-\s+son|arrested|alleged\s+corruption|court\s+appearance|pleaded\s+guilty|fraud\s+charges|police\s+say|sentenced\s+to|bribery|tender\s+fraud)\b/i.test(combinedText) ||
             /(?:were[\s_-]?hiring|we[\s_-]?are[\s_-]?hiring)/i.test(link);
         if (isSocialNoise) {
             if (feedStats) { feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
@@ -5536,6 +5536,14 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
 
             return;
         }
+    }
+
+    // Pre-AI physical goods/equipment supply check: discard pure supply and delivery of equipment or farming input kits
+    const isPhysicalEquipmentSupply = /\b(?:supply\s+(?:and|&)\s+delivery\s+of\s+equipment|farming\s+inputs?\s+kits?)\b/i.test(combinedText);
+    if (isPhysicalEquipmentSupply && !/\b(?:advisory|consultanc(?:y|ies)|study|assessment|policy|strategy|evaluation)\b/i.test(combinedText)) {
+        if (feedStats) { feedStats.lowRelevance++; feedStats.filtered++; feedStats.preAiRejected++; }
+
+        return;
     }
 
     // Pre-AI deadline check: drop already-closed/expired tenders before burning AI calls
