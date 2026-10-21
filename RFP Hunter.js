@@ -600,9 +600,9 @@ const CONFIG = {
             enabled: true,
             assumeAfrican: true,
             queries: [
-                'site:linkedin.com/posts ("Request for Proposals" OR "Call for Proposals" OR "Expression of Interest" OR RFP OR EOI) ("seed" OR "agriculture" OR "agribusiness") Africa',
-                'site:facebook.com ("Request for Proposals" OR "Call for Proposals" OR "tender") ("seed" OR "agriculture" OR "agribusiness") Africa',
-                '(site:x.com OR site:twitter.com) ("Request for Proposals" OR "Call for Proposals" OR "tender") ("seed" OR "agriculture" OR "agribusiness") Africa'
+                'site:linkedin.com/posts ("Request for Proposals" OR "Call for Proposals" OR "Expression of Interest" OR RFP OR EOI) ("seed" OR "agriculture" OR "agribusiness") Africa when:30d',
+                'site:facebook.com ("Request for Proposals" OR "Call for Proposals" OR "tender") ("seed" OR "agriculture" OR "agribusiness") Africa when:30d',
+                '(site:x.com OR site:twitter.com) ("Request for Proposals" OR "Call for Proposals" OR "tender") ("seed" OR "agriculture" OR "agribusiness") Africa when:30d'
             ]
         },
         {
@@ -691,8 +691,8 @@ function isLikelyStaleListing(text) {
     if (!yearMatches) return false;
     const currentYear = getCurrentYear();
     const years = yearMatches.map(Number);
-    const hasRecentYear = years.some(y => y >= currentYear - 1);
-    const hasOldYear = years.some(y => y <= currentYear - 3);
+    const hasRecentYear = years.some(y => y >= currentYear);
+    const hasOldYear = years.some(y => y < currentYear);
     return hasOldYear && !hasRecentYear;
 }
 
@@ -3477,6 +3477,10 @@ function fetchGlobalSouthOpportunitiesNotices(feed, existingLinks, existingTitle
         let link = linkMatch ? linkMatch[1].trim() : '';
         if (!title || !link) continue;
         const pubDateStr = dateMatch ? dateMatch[1].trim() : '';
+        if (pubDateStr && !isOnOrAfterFreshnessFloor(pubDateStr)) {
+            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            continue;
+        }
         const rawSnippet = descMatch ? decodeHtmlEntities(descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) : '';
         const description = [
             title,
@@ -3549,6 +3553,10 @@ function fetchGoogleNewsSocialNotices(feed, existingLinks, existingTitleKeys, bu
 
             const title = decodeHtmlEntities(rawTitle.replace(/\s+-\s+(?:LinkedIn|Facebook|X|Twitter)$/i, ''));
             const pubDateStr = dateMatch ? dateMatch[1].trim() : '';
+            if (pubDateStr && !isOnOrAfterFreshnessFloor(pubDateStr)) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                continue;
+            }
             const sourceName = sourceMatch ? sourceMatch[1].trim() : 'Social Media';
             const rawSnippet = descMatch ? decodeHtmlEntities(descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) : '';
 
