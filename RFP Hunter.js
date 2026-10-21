@@ -2883,6 +2883,10 @@ function fetchAsarecaNotices(feed, existingLinks, existingTitleKeys, bucket, fee
         const link = item.link || '';
         const excerpt = (item.excerpt && item.excerpt.rendered) ? item.excerpt.rendered.replace(/<[^>]+>/g, '').trim() : '';
         const dateStr = item.date ? item.date.split('T')[0] : '';
+        if (dateStr && !isOnOrAfterFreshnessFloor(dateStr)) {
+            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            return;
+        }
         const description = [
             'Buyer: ASARECA (Association for Strengthening Agricultural Research in Eastern and Central Africa)',
             dateStr ? `Published: ${dateStr}` : '',
@@ -3733,6 +3737,10 @@ function processFundsForNgosQuery(url, kw, feed, existingLinks, existingTitleKey
 
             : '';
         const dateStr = item.date ? item.date.split('T')[0] : '';
+        if (dateStr && !isOnOrAfterFreshnessFloor(dateStr)) {
+            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            return;
+        }
         const description = [
             'Source: FundsforNGOs Funding Intelligence',
             dateStr ? `Published: ${dateStr}` : '',
@@ -5532,6 +5540,18 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
         if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
 
         return;
+    }
+
+    // Universal Publication Date Freshness Gate:
+    // If the candidate carries an explicit publication/posted date in its text/description, verify it is on or after the freshness floor.
+    const pubDateMatch = combinedText.match(/\bpublished[\s:]+([a-z0-9,\s\/:\-]+?)(?:\s*\||\s*$)/i);
+    if (pubDateMatch) {
+        const rawPubDate = pubDateMatch[1].trim();
+        if (rawPubDate && !isOnOrAfterFreshnessFloor(rawPubDate)) {
+            if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+
+            return;
+        }
     }
 
     // Pre-AI negative filter: discard obvious civil works, railway, municipal hardware, curriculum, medical supplies, and non-agri sectors lacking seed/crop context
