@@ -2305,9 +2305,12 @@ function fetchWorldBankNotices(feed, existingLinks, existingTitleKeys, bucket, f
             const country = notice.project_ctry_name || notice.countryname || '';
             const refNo = notice.bid_reference_no ? ` [Ref: ${notice.bid_reference_no}]` : '';
             const description = `${title}${refNo} - Project: ${notice.project_name || ''} - Country: ${country} - Notice Type: ${noticeType} - Date: ${notice.noticedate || ''}`;
-            if (notice.noticedate && !isOnOrAfterFreshnessFloor(notice.noticedate)) {
-                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-                return;
+            if (notice.noticedate) {
+                const pDate = parseDateFlexible(notice.noticedate);
+                if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear()) {
+                    if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                    return;
+                }
             }
             addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, false, null, null, null, feedStats);
         });
@@ -2363,9 +2366,12 @@ function fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedSta
         const publicationDate = notice.PD || notice.publicationDate || null;
         const description = `${title} — published ${publicationDate || 'date not specified'}, country: ${notice.CY || 'n/a'}`;
         if (!link) return;
-        if (publicationDate && !isOnOrAfterFreshnessFloor(publicationDate)) {
-            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-            return;
+        if (publicationDate) {
+            const pDate = parseDateFlexible(publicationDate);
+            if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear()) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
         }
         addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, false, null, null, null, feedStats);
     });
@@ -2760,7 +2766,7 @@ function fetchAgraOpportunitiesNotices(feed, existingLinks, existingTitleKeys, b
             const rawTitle = (item.title && item.title.rendered) ? item.title.rendered : '';
             const cleanTitle = rawTitle.replace(/&#8211;/g, '–').replace(/&#8217;/g, "'").replace(/&#038;/g, '&').replace(/<[^>]+>/g, '').trim();
             if (!cleanTitle) return;
-            if (/\b(Officer|Coordinator|Director|Lead|Specialist|Manager|Accountant|Associate|Assistant|Intern)\b/i.test(cleanTitle) &&
+            if (/\b(Officer|Coordinator|Director|Lead|Specialist|Manager|Accountant|Associate|Assistant|Intern|Internship|Chief of Staff)\b/i.test(cleanTitle) &&
                 !/\b(Consultant|Consultancy|Firm|RFP|EOI|Call for Proposals|Call for Concept Notes|Grant|Challenge Fund|RFCN)\b/i.test(cleanTitle)) {
                 if (feedStats) { feedStats.seen++; feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
                 return;
@@ -2808,7 +2814,7 @@ function fetchAgraOpportunitiesNotices(feed, existingLinks, existingTitleKeys, b
             let link = linkMatch ? linkMatch[1] : '';
             if (!title || !link) continue;
             if (!/^https?:\/\//i.test(link)) link = feed.baseUrl + (link.startsWith('/') ? '' : '/') + link;
-            if (/\b(Officer|Coordinator|Director|Lead|Specialist|Manager|Accountant|Associate|Assistant|Intern)\b/i.test(title) &&
+            if (/\b(Officer|Coordinator|Director|Lead|Specialist|Manager|Accountant|Associate|Assistant|Intern|Internship|Chief of Staff)\b/i.test(title) &&
                 !/\b(Consultant|Consultancy|Firm|RFP|EOI|Call for Proposals|Call for Concept Notes|Grant|Challenge Fund|RFCN)\b/i.test(title)) {
                 if (feedStats) { feedStats.seen++; feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
                 continue;
@@ -2883,9 +2889,12 @@ function fetchAsarecaNotices(feed, existingLinks, existingTitleKeys, bucket, fee
         const link = item.link || '';
         const excerpt = (item.excerpt && item.excerpt.rendered) ? item.excerpt.rendered.replace(/<[^>]+>/g, '').trim() : '';
         const dateStr = item.date ? item.date.split('T')[0] : '';
-        if (dateStr && !isOnOrAfterFreshnessFloor(dateStr)) {
-            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-            return;
+        if (dateStr) {
+            const pDate = parseDateFlexible(dateStr);
+            if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear()) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
         }
         const description = [
             'Buyer: ASARECA (Association for Strengthening Agricultural Research in Eastern and Central Africa)',
@@ -3737,9 +3746,12 @@ function processFundsForNgosQuery(url, kw, feed, existingLinks, existingTitleKey
 
             : '';
         const dateStr = item.date ? item.date.split('T')[0] : '';
-        if (dateStr && !isOnOrAfterFreshnessFloor(dateStr)) {
-            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-            return;
+        if (dateStr) {
+            const pDate = parseDateFlexible(dateStr);
+            if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear()) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
         }
         const description = [
             'Source: FundsforNGOs Funding Intelligence',
@@ -5543,20 +5555,27 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
     }
 
     // Universal Publication Date Freshness Gate:
-    // If the candidate carries an explicit publication/posted date in its text/description, verify it is on or after the freshness floor.
+    // Discard only if the explicit publication date is from a prior calendar year (e.g. 2025, 2024)
+    // without any current or future year (2026+) context in the listing.
+    // Fresh opportunities from the current year (2026+) or rolling/dateless opportunities must NEVER be dropped.
     const pubDateMatch = combinedText.match(/\bpublished[\s:]+([a-z0-9,\s\/:\-]+?)(?:\s*\||\s*$)/i);
     if (pubDateMatch) {
         const rawPubDate = pubDateMatch[1].trim();
-        if (rawPubDate && !isOnOrAfterFreshnessFloor(rawPubDate)) {
-            if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+        const parsedPubDate = parseDateFlexible(rawPubDate);
+        if (parsedPubDate && !isNaN(parsedPubDate.getTime())) {
+            const pubYear = parsedPubDate.getFullYear();
+            const currentYear = getCurrentYear();
+            if (pubYear < currentYear && !/\b202[6-9]\b/.test(combinedText)) {
+                if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
 
-            return;
+                return;
+            }
         }
     }
 
     // Pre-AI negative filter: discard obvious civil works, railway, municipal hardware, curriculum, medical supplies, and non-agri sectors lacking seed/crop context
 
-    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|travaux\s+routiers?|axe\s+routier|route\s+rev[eê]tue|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|guarding\s+services?|security\s+guards?|armed\s+guards?|security\s+services?|physical\s+security|supply\s+(?:and\s+delivery\s+)?of\s+(?:urea|bulk|npk|chemical)\s+fertilizer|fertilizer\s+delivery|automated.*processing\s+equipment|processing\s+equipment|milling\s+equipment|oil\s+processing\s+equipment|heavy\s+machinery|plant\s+machinery|industrial\s+equipment|drilling\s+(?:and\s+equipping\s+)?of\s+boreholes?|equipping\s+of\s+boreholes?|water\s+trucking|borehole\s+drilling|pre[-_\s]?seed\b|angel\s+invest(?:ment|or)|venture\s+capital|equity\s+fund(?:ing)?|series\s+[a-c]\s+funding|incubator\s+cohort|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban|cybercriminalité|cybersecurity|cyber-security|cyber\s+security|réalité\s+augmentée|augmented\s+reality|virtual\s+reality|réalité\s+virtuelle|software\s+development|développement\s+logiciel|data\s+centre|data\s+center|réseau\s+informatique|csu\s+equipment|equipamento\s+necessario\s+para\s+o\s+csu|computer\s+lab|fibre\s+optic|cloud\s+computing|data\s+science\s+curriculum|dell|lenovo|hp\s+laptops?|tablets?\s+and\s+laptops?|laptops?\s+and\s+tablets?|ssl\s+certificates?|procurement\s+of\s+servers?|server\s+hardware|network\s+switches|photocopiers?|toner\s+cartridges?|office\s+stationery|office\s+furniture|violences?\s+basées?\s+sur\s+le\s+genre|gender[-_\s]+based\s+violence|\bvbg\b|\bgbv\b|travel\s+audit|credit\s+life\s+policy|insurance\s+premiums|claims\s+administration|équipements?\s+de\s+p[eê]che|matériel\s+de\s+p[eê]che|outils\s+et\s+d\'équipements?\s+de\s+p[eê]che|marine\s+fisheries|marine\s+fishing|deep[-_\s]sea\s+fisheries|breeding\s+(?:sheep|goats|cattle|pigs|chickens|poultry)|petits\s+ruminants|poussins|alevins|aliments?\s+bétail|midi\s*bus(?:es)?|bus\s+spare\s+parts|spare\s+parts|polyten[e]?\s+tubes?|polythene\s+tubes?|polyethylene\s+tubes?|surplus\s+it\s+assets|written[-_\s]off\s+computer)\b/i;
+    const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|travaux\s+routiers?|axe\s+routier|route\s+rev[eê]tue|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|guarding\s+services?|security\s+guards?|armed\s+guards?|security\s+services?|physical\s+security|supply\s+(?:and\s+delivery\s+)?of\s+(?:urea|bulk|npk|chemical)\s+fertilizer|fertilizer\s+delivery|automated.*processing\s+equipment|processing\s+equipment|milling\s+equipment|oil\s+processing\s+equipment|heavy\s+machinery|plant\s+machinery|industrial\s+equipment|drilling\s+(?:and\s+equipping\s+)?of\s+boreholes?|equipping\s+of\s+boreholes?|water\s+trucking|borehole\s+drilling|pre[-_\s]?seed\b|angel\s+invest(?:ment|or)|venture\s+capital|equity\s+fund(?:ing)?|series\s+[a-c]\s+funding|incubator\s+cohort|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban|cybercriminalité|cybersecurity|cyber-security|cyber\s+security|réalité\s+augmentée|augmented\s+reality|virtual\s+reality|réalité\s+virtuelle|software\s+development|développement\s+logiciel|data\s+centre|data\s+center|réseau\s+informatique|csu\s+equipment|equipamento\s+necessario\s+para\s+o\s+csu|computer\s+lab|fibre\s+optic|cloud\s+computing|data\s+science\s+curriculum|dell|lenovo|hp\s+laptops?|tablets?\s+and\s+laptops?|laptops?\s+and\s+tablets?|ssl\s+certificates?|procurement\s+of\s+servers?|server\s+hardware|network\s+switches|photocopiers?|toner\s+cartridges?|office\s+stationery|office\s+furniture|headphones|external drive|double-door refrigerator|refrigerators?|standing tables?|monitor cables?|provision of legal services|violences?\s+basées?\s+sur\s+le\s+genre|gender[-_\s]+based\s+violence|\bvbg\b|\bgbv\b|travel\s+audit|credit\s+life\s+policy|insurance\s+premiums|claims\s+administration|équipements?\s+de\s+p[eê]che|matériel\s+de\s+p[eê]che|outils\s+et\s+d\'équipements?\s+de\s+p[eê]che|marine\s+fisheries|marine\s+fishing|deep[-_\s]sea\s+fisheries|breeding\s+(?:sheep|goats|cattle|pigs|chickens|poultry)|petits\s+ruminants|poussins|alevins|aliments?\s+bétail|midi\s*bus(?:es)?|bus\s+spare\s+parts|spare\s+parts|polyten[e]?\s+tubes?|polythene\s+tubes?|polyethylene\s+tubes?|surplus\s+it\s+assets|written[-_\s]off\s+computer)\b/i;
     if (NON_AGRI_CIVIL_WORKS_REGEX.test(combinedText)) {
         const hasSeedOrCrop = CORE_SEED_KEYWORDS.some(k => new RegExp('(?:^|[^a-zA-Z0-9_])' + escapeRegex(k) + '(?:$|[^a-zA-Z0-9_])', 'i').test(combinedText)) || /\b(seed|variety|breeder|germplasm|crop|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|gmo|biosafety|biotech|transgenic|agtech|agritech|agri[-\s]?tech)s?\b/i.test(combinedText);
         if (!hasSeedOrCrop) {
@@ -7031,6 +7050,7 @@ const SECONDARY_AGRI_KEYWORDS = [
     'baseline survey', 'feasibility study', 'business plan', 'block farm', 'policy advocacy',
     'agri-enterprise', 'youth organizations', 'youth employment', 'rural youth',
     'producteurs', 'producteurs de riz', 'riz', 'bas-fonds', 'sri',
+    'farm', 'farms', 'mega farm', 'mega farms', 'agri enterprise', 'agri enterprises', 'green revolution',
     'international trade', 'cross-border trade', 'trade compliance', 'paperless trade',
     'supply chain visibility', 'market intelligence', 'customs digitisation', 'customs digitization',
     'trade facilitation', 'trade logistics', 'market sounding', 'request for information', 'digital tools',
@@ -7075,8 +7095,9 @@ function getAgriMatchScore(text) {
     const countryHits = countDistinctKeywordHits(lower, TRACK_RECORD_TARGETS);
     const partnerHits = countDistinctKeywordHits(lower, KNOWN_PARTNER_KEYWORDS);
     const secondaryHits = countDistinctKeywordHits(lower, SECONDARY_AGRI_KEYWORDS);
-    const procurementSignal = /\b(rfp|rfq|eoi|expression of interest|request for proposals?|request for quotations?|tender|call for proposals?|call for concept notes?|consultancy|procurement notice)\b/i.test(lower);
-    const agricultureSignal = coreHits > 0 || secondaryHits > 0 || /\b(seed|agriculture|agribusiness|agrifood|agri-food|food\s+systems?|crop|farmer|smallholder|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|planting material|agtech|agritech|agri[-\s]?tech|advisory|agri-enterprise|policy\s+advocacy|block\s+farm|producteurs?|riz|gmo|gmos|biosafety|biotech|transgenic|genetically\s+modified)\b/i.test(lower);
+    const procurementSignal = /\b(rfp|rfq|eoi|expression of interest|request for proposals?|request for quotations?|tender|call for proposals?|call for concept notes?|consultancy|procurement notice|rfcn)\b/i.test(lower);
+    const isAgriInstitution = /\b(?:agra|alliance for a green revolution in africa|cimmyt|ilri|aatf|asareca|cgiar|fao|ifad)\b/i.test(lower);
+    const agricultureSignal = coreHits > 0 || secondaryHits > 0 || /\b(seed|agriculture|agribusiness|agrifood|agri-food|food\s+systems?|crop|farmer|farm|farms|farming|smallholder|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|planting material|agtech|agritech|agri[-\s]?tech|advisory|agri[-\s]?enterprise|policy\s+advocacy|block\s+farm|producteurs?|riz|gmo|gmos|biosafety|biotech|transgenic|genetically\s+modified)\b/i.test(lower) || (isAgriInstitution && procurementSignal);
 
     // An opportunity with zero seed keywords, zero secondary agri keywords, and no agricultural signal
 
