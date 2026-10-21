@@ -246,6 +246,13 @@ const CONFIG = {
     EXISTING_ROWS_LOOKBACK: 3000,
     RENDER_PROVIDERS: [
         {
+            name: 'ScrapingAnt',
+            apiKeyProperty: 'SCRAPINGANT_API_KEY',
+            creditBudget: 10000,
+            resetPeriod: 'monthly',
+            buildUrl: (apiKey, targetUrl) => `https://api.scrapingant.com/v2/general?x-api-key=${apiKey}&url=${encodeURIComponent(targetUrl)}&browser=true`
+        },
+        {
             name: 'ScraperAPI',
             apiKeyProperty: 'RENDER_API_KEY',
             creditBudget: 1000,
@@ -712,7 +719,7 @@ function validateScriptProperties() {
 
     const optional = [
         'SERPER_API_KEY', 'TAVILY_API_KEY', 'SERPAPI_API_KEY', 'BRAVE_SEARCH_API_KEY', 'GOOGLE_CSE_API_KEY', 'GOOGLE_CSE_CX',
-        'RENDER_API_KEY', 'CRAWLBASE_JS_TOKEN', 'GROQ_API_KEY', 'CEREBRAS_API_KEY',
+        'SCRAPINGANT_API_KEY', 'RENDER_API_KEY', 'CRAWLBASE_JS_TOKEN', 'GROQ_API_KEY', 'CEREBRAS_API_KEY',
         'SLACK_WEBHOOK_URL', 'TEAMS_WEBHOOK_URL', 'ALERT_EMAILS'
     ];
     const missingOptional = optional.filter(k => !props.getProperty(k));
@@ -833,6 +840,7 @@ function checkConfigFromMenu() {
     ];
     const optional = [
         { key: 'GROQ_API_KEY', label: 'Groq Cloud (Free Fallback LLM)' },
+        { key: 'SCRAPINGANT_API_KEY', label: 'ScrapingAnt (JS Rendering - 10,000 free credits/mo)' },
         { key: 'RENDER_API_KEY', label: 'ScraperAPI (JS Rendering)' },
         { key: 'CRAWLBASE_JS_TOKEN', label: 'Crawlbase (JS Rendering Backup)' },
         { key: 'SLACK_WEBHOOK_URL', label: 'Slack Alerts Webhook' },
@@ -5958,6 +5966,9 @@ function getRenderProviderKeyPool(provider) {
     if (provider.apiKeyProperty === 'RENDER_API_KEY') {
         primaryNames.push('SCRAPERAPI_KEY');
     }
+    if (provider.apiKeyProperty === 'SCRAPINGANT_API_KEY') {
+        primaryNames.push('SCRAPINGANT_KEY', 'SCRAPING_ANT_API_KEY');
+    }
     primaryNames.forEach(propName => {
         const raw = props.getProperty(propName);
         if (raw) {
@@ -5968,11 +5979,14 @@ function getRenderProviderKeyPool(provider) {
         }
     });
 
-    // 2. Numbered properties: RENDER_API_KEY_2..10, SCRAPERAPI_KEY_2..10, CRAWLBASE_JS_TOKEN_2..10
+    // 2. Numbered properties: RENDER_API_KEY_2..10, SCRAPERAPI_KEY_2..10, CRAWLBASE_JS_TOKEN_2..10, SCRAPINGANT_API_KEY_2..10
     for (let i = 2; i <= 10; i++) {
         const numberedNames = [`${provider.apiKeyProperty}_${i}`];
         if (provider.apiKeyProperty === 'RENDER_API_KEY') {
             numberedNames.push(`SCRAPERAPI_KEY_${i}`);
+        }
+        if (provider.apiKeyProperty === 'SCRAPINGANT_API_KEY') {
+            numberedNames.push(`SCRAPINGANT_KEY_${i}`, `SCRAPING_ANT_API_KEY_${i}`);
         }
         numberedNames.forEach(propName => {
             const numKey = props.getProperty(propName);
@@ -6052,7 +6066,7 @@ function fetchRenderedHtml(targetUrl) {
                 const bodyPreview = response.getContentText().substring(0, 300);
                 if (responseCode !== 200) {
                     const isCreditExhausted = /exhausted.*credit|credit.*exhausted|quota.*exceeded|not enough credits/i.test(bodyPreview);
-                    const isKeyInvalid = (responseCode === 401 || /unauthorized|invalid.*api.*key/i.test(bodyPreview));
+                    const isKeyInvalid = (responseCode === 401 || /unauthorized|invalid.*api.*key|api.*token.*wrong/i.test(bodyPreview));
                     const isBlockOrLimit = (responseCode === 403 || responseCode === 429 || responseCode === 520);
                     if (isCreditExhausted || isKeyInvalid || isBlockOrLimit) {
                         Logger.log(`[Render Key Exhausted] ${provider.name} key ${keyPreview} failed (HTTP ${responseCode}). Rotating to next key (${activeIdx + 1}/${pool.length})...`);
