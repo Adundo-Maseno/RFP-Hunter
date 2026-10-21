@@ -3490,9 +3490,12 @@ function fetchGlobalSouthOpportunitiesNotices(feed, existingLinks, existingTitle
         let link = linkMatch ? linkMatch[1].trim() : '';
         if (!title || !link) continue;
         const pubDateStr = dateMatch ? dateMatch[1].trim() : '';
-        if (pubDateStr && !isOnOrAfterFreshnessFloor(pubDateStr)) {
-            if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-            continue;
+        if (pubDateStr) {
+            const pDate = parseDateFlexible(pubDateStr);
+            if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear()) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                continue;
+            }
         }
         const rawSnippet = descMatch ? decodeHtmlEntities(descMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()) : '';
         const description = [
