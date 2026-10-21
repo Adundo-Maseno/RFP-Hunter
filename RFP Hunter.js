@@ -1,11 +1,34 @@
 /**
  * ==============================================================================
- * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.31 (ENTERPRISE PRODUCTION EDITION)
+ * GLOBAL AGRIBUSINESS RFP HUNTER ENGINE v5.32 (INTELLIGENT LIFECYCLE & STRATEGIC PROCUREMENT)
  * ==============================================================================
  *
  * FIRM PROFILE: Agri Experience Ltd (Nairobi, Kenya)
  * Primary Focus: Seed Systems, AgTech, Policy & Regulatory Advisory, and Agricultural
  * Transformation across 21+ Sub-Saharan African Countries.
+ *
+ * MAJOR ENHANCEMENTS IN VERSION 5.32:
+ *  1. AUTOMATED SHEET LIFECYCLE SWEEPER (auditTrackedOpportunitiesStatus):
+ *     - Automatically audits logged notices on Active Open RFPs against real-time local deadlines.
+ *     - Dynamically transitions and soft-color-codes status cells in batch:
+ *       * "OPEN" (> 7 days remaining, soft green #c8e6c9 / #1b5e20)
+ *       * "CLOSING SOON (Xd)" (<= 7 days remaining, soft amber #fff9c4 / #e65100)
+ *       * "EXPIRED / CLOSED" (deadline passed, soft gray #f5f5f5 / #757575)
+ *       * "OPEN (Rolling / TBD)" (ongoing/rolling solicitations, soft mint #e8f5e9 / #2e7d32)
+ *     - Automatically scans and retires legacy contradictory entries in-place.
+ *  2. STRATEGIC BIDDING CLASSIFICATION (LEAD_BIDDER vs. CONSORTIUM_PARTNER):
+ *     - AI prompt and JSON schema classify each opportunity into LEAD_BIDDER vs. CONSORTIUM_PARTNER.
+ *     - Suggests leading international prime partners (e.g. DAI, Chemonics, RTI, Tetra Tech, TechnoServe)
+ *       for large-scale donor programs where Agri Experience serves as specialized seed systems / policy partner.
+ *     - Recorded in new Column 12 ("Bidding Modality") with automatic sheet header auto-migration.
+ *  3. ADDENDUM & DEADLINE EXTENSION DETECTOR:
+ *     - Detects addenda, corrigenda, amendments, and deadline extensions matching tracked procurement reference codes.
+ *     - Automatically updates the existing row's closing date and marks status as "OPEN (Extended)" with note
+ *       "[Deadline extended to YYYY-MM-DD per Addendum]", eliminating stale expiration while preventing duplicate rows.
+ *  4. ATTACHED TOR & OPPORTUNITY DEEP INGESTION:
+ *     - Selectively enriches terse candidate descriptions (< 350 chars) or institutional opportunity landing pages
+ *       (AGRA, AATF, AfDB, World Bank, CIMMYT, etc.) by fetching substantive paragraphs and attached TOR links (PDF/DOC).
+ *     - Fully cached via CacheService (6-hour TTL) with strict timeout ceiling guards.
  *
  * MAJOR ENHANCEMENTS IN VERSION 5.31:
  *  1. ZERO-COST SOCIAL MEDIA PROCUREMENT HARVESTER (LINKEDIN, FACEBOOK, X/TWITTER):
@@ -1039,13 +1062,16 @@ function runRfpTrackerV4() {
 
     const sheet = getOrCreateSheet();
     const filteredSheet = getOrCreateFilteredSheet();
-    updateExpiredProposalsStatus(sheet);
-    const { links: existingLinks, titleKeys: existingTitleKeys, refCodes: existingRefCodes } = getExistingLinksAndTitleKeys(sheet);
+    auditTrackedOpportunitiesStatus(sheet);
+    const { links: existingLinks, titleKeys: existingTitleKeys, refCodes: existingRefCodes, refCodeRowMap, titleRowMap } = getExistingLinksAndTitleKeys(sheet);
     const { links: existingFilteredLinks, titleKeys: existingFilteredTitleKeys, refCodes: existingFilteredRefCodes } = getExistingLinksAndTitleKeys(filteredSheet);
     existingFilteredLinks.forEach(link => existingLinks.add(link));
     existingFilteredTitleKeys.forEach(key => existingTitleKeys.add(key));
     existingFilteredRefCodes.forEach(code => existingRefCodes.add(code));
     existingLinks.refCodes = existingRefCodes;
+    existingLinks.refCodeRowMap = refCodeRowMap;
+    existingLinks.titleRowMap = titleRowMap;
+    existingLinks.sheet = sheet;
 
     // Snapshot pre-discovery sheet entries so sampleRoundRobin skips items already logged on sheet
 
@@ -1160,6 +1186,9 @@ function runRfpTrackerV4() {
     }
 
     candidatesToProcess.forEach((item, i) => { item.id = i + 1; });
+
+    // Deep Ingestion: Selectively enrich terse descriptions and attached TORs before AI evaluation
+    enrichCandidatesWithDeepInspection(candidatesToProcess, runStartTime);
 
     // Evaluates in manageable chunks to avoid output token truncation
 
@@ -1474,6 +1503,15 @@ function runRfpTrackerV4() {
         }
 
         const opportunityCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link);
+        let formattedModality = 'N/A';
+        if (evalResult.biddingModality === 'LEAD_BIDDER') {
+            formattedModality = 'LEAD BIDDER (Prime)';
+        } else if (evalResult.biddingModality === 'CONSORTIUM_PARTNER') {
+            formattedModality = `CONSORTIUM (${evalResult.partnerStrategy || 'Partner with Prime'})`;
+        } else if (evalResult.goNoGo === 'GO' || (evalResult.score && evalResult.score >= 60)) {
+            formattedModality = 'LEAD BIDDER (Prime)';
+        }
+
         mainRowsToAppend.push([
             now,
             item.source,
@@ -1485,12 +1523,13 @@ function runRfpTrackerV4() {
             evalResult.score,
             evalResult.pillar,
             evalResult.summary,
-            opportunityCountry
+            opportunityCountry,
+            formattedModality
         ]);
         existingLinks.add(item.link);
         sourceStats[item.source] = (sourceStats[item.source] || 0) + 1;
         if (evalResult.isOpen && evalResult.score >= CONFIG.MIN_SCORE_FOR_ALERT) {
-            highPriorityMatches.push({ source: item.source, title: item.title, link: item.link, country: opportunityCountry, ...evalResult });
+            highPriorityMatches.push({ source: item.source, title: item.title, link: item.link, country: opportunityCountry, biddingModality: formattedModality, ...evalResult });
         }
     });
 
@@ -1510,6 +1549,9 @@ function runRfpTrackerV4() {
 
             .setValues(mainRowsToAppend);
         Logger.log(`[BATCH SHEET WRITE] Wrote ${mainRowsToAppend.length} row(s) to ${CONFIG.SHEET_NAME}.`);
+
+        // Dynamically audit lifecycle statuses and apply color coding to newly logged rows
+        auditTrackedOpportunitiesStatus(sheet);
     }
 
     Logger.log('=== GLOBAL SOURCE DIAGNOSTIC SUMMARY ===');
@@ -4523,54 +4565,241 @@ function scrapePortalBlockLevel(feed, existingLinks, existingTitleKeys, bucket, 
  * Keeps the active sheet lean, fresh, and actionable.
  */
 
-function updateExpiredProposalsStatus(sheet) {
+function auditTrackedOpportunitiesStatus(sheet) {
     try {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
         // Range spans Col 3 (Title) to Col 10 (Executive Summary) = 8 columns
         const range = sheet.getRange(2, 3, lastRow - 1, 8);
         const values = range.getValues();
-        const today = new Date().setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         let updatedCount = 0;
 
-        for (let i = 0; i < values.length; i++) {
+        const numRows = values.length;
+        const newStatuses = [];
+        const newBgs = [];
+        const newFontColors = [];
+
+        for (let i = 0; i < numRows; i++) {
             const title = String(values[i][0] || '');
-            const status = values[i][2]; // Col 5: Status
+            let status = String(values[i][2] || 'OPEN'); // Col 5: Status
             const closing = values[i][3]; // Col 6: Closing Date
             const summary = String(values[i][7] || ''); // Col 10: Executive Summary
 
-            if (status === 'OPEN') {
-                // 1. Check for expired deadline
-                if (closing && closing !== 'Not Specified') {
-                    const closingDate = new Date(closing);
-                    if (!isNaN(closingDate.getTime()) && closingDate.getTime() < today) {
-                        values[i][2] = 'CLOSED / EXPIRED';
-                        updatedCount++;
-                        continue;
+            // 1. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds)
+            const isLegacyContradiction = /\b(?:personal social media advertisement|vendor offering services rather than|focuses (?:primarily )?on the medical sector|medical sector rather than agriculture|completely unrelated to agriculture|homestead garden[-_\s]+crop seeds)\b/i.test(summary) ||
+                /\b(?:homestead garden[-_\s]+crop seeds)\b/i.test(title);
+
+            if (isLegacyContradiction) {
+                values[i][2] = 'CLOSED / EXPIRED';
+                values[i][4] = 'NO-GO'; // Col 7: AI Recommendation
+                values[i][5] = 0;       // Col 8: Match Score (%)
+                newStatuses.push(['CLOSED / EXPIRED']);
+                newBgs.push(['#f5f5f5']);
+                newFontColors.push(['#757575']);
+                updatedCount++;
+                Logger.log(`[Maintenance] Retired legacy contradictory notice in row ${i + 2}: "${title}"`);
+                continue;
+            }
+
+            // 2. Compute dynamic lifecycle status
+            if (closing && closing !== 'Not Specified' && !String(closing).toLowerCase().includes('ongoing')) {
+                const parsedDate = parseDateFlexible(closing);
+                if (parsedDate && !isNaN(parsedDate.getTime())) {
+                    const deadline = new Date(parsedDate);
+                    deadline.setHours(23, 59, 59, 999);
+                    const msDiff = deadline.getTime() - today.getTime();
+                    const daysRemaining = Math.ceil(msDiff / (1000 * 60 * 60 * 24));
+
+                    if (daysRemaining < 0) {
+                        newStatuses.push(['EXPIRED / CLOSED']);
+                        newBgs.push(['#f5f5f5']);
+                        newFontColors.push(['#757575']);
+                        if (status !== 'EXPIRED / CLOSED' && status !== 'CLOSED / EXPIRED' && status !== 'CLOSED') {
+                            updatedCount++;
+                        }
+                    } else if (daysRemaining <= 7) {
+                        const closingSoonTag = `CLOSING SOON (${daysRemaining}d)`;
+                        newStatuses.push([closingSoonTag]);
+                        newBgs.push(['#fff9c4']);
+                        newFontColors.push(['#e65100']);
+                        if (status !== closingSoonTag) {
+                            updatedCount++;
+                        }
+                    } else {
+                        const openTag = status.includes('Extended') ? 'OPEN (Extended)' : 'OPEN';
+                        newStatuses.push([openTag]);
+                        newBgs.push(['#c8e6c9']);
+                        newFontColors.push(['#1b5e20']);
                     }
+                } else {
+                    newStatuses.push([status]);
+                    newBgs.push(['#ffffff']);
+                    newFontColors.push(['#000000']);
                 }
-
-                // 2. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds)
-                const isLegacyContradiction = /\b(?:personal social media advertisement|vendor offering services rather than|focuses (?:primarily )?on the medical sector|medical sector rather than agriculture|completely unrelated to agriculture|homestead garden[-_\s]+crop seeds)\b/i.test(summary) ||
-                    /\b(?:homestead garden[-_\s]+crop seeds)\b/i.test(title);
-
-                if (isLegacyContradiction) {
-                    values[i][2] = 'CLOSED / EXPIRED';
-                    values[i][4] = 'NO-GO'; // Col 7: AI Recommendation
-                    values[i][5] = 0;       // Col 8: Match Score (%)
-                    updatedCount++;
-                    Logger.log(`[Maintenance] Retired legacy contradictory notice in row ${i + 2}: "${title}"`);
+            } else {
+                // Missing, 'Not Specified', or rolling deadline
+                if (status.includes('CLOSED') || status.includes('EXPIRED')) {
+                    newStatuses.push(['EXPIRED / CLOSED']);
+                    newBgs.push(['#f5f5f5']);
+                    newFontColors.push(['#757575']);
+                } else {
+                    newStatuses.push(['OPEN (Rolling / TBD)']);
+                    newBgs.push(['#e8f5e9']);
+                    newFontColors.push(['#2e7d32']);
                 }
             }
         }
 
-        if (updatedCount > 0) {
+        // Batch update Status column (Col 5)
+        const statusRange = sheet.getRange(2, 5, numRows, 1);
+        statusRange.setValues(newStatuses);
+        statusRange.setBackgrounds(newBgs);
+        statusRange.setFontColors(newFontColors);
+
+        // If legacy contradictions were modified, write back columns 3-10
+        if (values.some(v => v[4] === 'NO-GO' && v[5] === 0)) {
             range.setValues(values);
-            Logger.log(`[Maintenance] Automatically updated ${updatedCount} expired/legacy notice(s) in Active sheet.`);
+        }
+
+        if (updatedCount > 0) {
+            Logger.log(`[Maintenance] Automatically audited and updated ${updatedCount} notice lifecycle status(es) in Active sheet.`);
         }
     } catch (e) {
-        Logger.log('[Maintenance] Note on updateExpiredProposalsStatus: ' + e.message);
+        Logger.log('[Maintenance] Note on auditTrackedOpportunitiesStatus: ' + e.message);
     }
+}
+
+/**
+ * Backward compatibility alias for updateExpiredProposalsStatus.
+ */
+function updateExpiredProposalsStatus(sheet) {
+    return auditTrackedOpportunitiesStatus(sheet);
+}
+
+/**
+ * Selective Deep Ingestion & Attached TOR Extractor:
+ * For candidates entering AI evaluation whose descriptions are sparse (< 350 chars) or link to institutional
+ * opportunity landing pages (AGRA, AATF, AfDB, World Bank, CIMMYT, ASARECA, etc.),
+ * fetches the HTML landing page, extracts substantive scope paragraphs, and detects attached downloadable TORs (PDF/DOC).
+ * Leverages CacheService (6-hour TTL) so repeat runs incur zero network latency.
+ */
+function enrichCandidatesWithDeepInspection(candidates, runStartTime) {
+    if (!candidates || candidates.length === 0) return;
+    const cache = CacheService.getScriptCache();
+    const maxLiveDeepFetches = 6;
+    let liveFetchesCount = 0;
+    const safeDeepInspectionCeilingMs = 175000; // 175s safe ceiling
+
+    for (let i = 0; i < candidates.length; i++) {
+        const item = candidates[i];
+        if (!item || !item.link) continue;
+        if (typeof runStartTime === 'number' && (Date.now() - runStartTime > safeDeepInspectionCeilingMs)) {
+            Logger.log(`[Deep Ingestion Guard] Discovery & ingestion reached ${Math.round((Date.now() - runStartTime) / 1000)}s. Bypassing remaining deep fetches to protect AI evaluation budget.`);
+            break;
+        }
+
+        // Check if item needs deep inspection:
+        const isSparse = !item.description || item.description.trim().length < 350;
+        const isInstitutionalHost = /\b(?:agra\.org|afdb\.org|aatf-africa\.org|asareca\.org|cimmyt\.org|locatefund\.com|ungm\.org|worldbank\.org|allbusiness\.africa|tendersure\.co\.ke)\b/i.test(item.link);
+        const isPdfDirect = /\.pdf(?:$|\?)/i.test(item.link);
+
+        if ((!isSparse && !isInstitutionalHost) || isPdfDirect) {
+            continue;
+        }
+
+        // Cache Key (using hash of URL)
+        const urlHash = 'TOR_DEEP_' + Math.abs(hashString(item.link)).toString(36);
+        const cached = cache.get(urlHash);
+        if (cached) {
+            item.description = `${item.description ? item.description + '\n' : ''}${cached}`.trim();
+            continue;
+        }
+
+        if (liveFetchesCount >= maxLiveDeepFetches) {
+            continue;
+        }
+
+        try {
+            liveFetchesCount++;
+            const response = UrlFetchApp.fetch(item.link, {
+                muteHttpExceptions: true,
+                followRedirects: true,
+                validateHttpsCertificates: false,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                }
+            });
+
+            if (response.getResponseCode() === 200) {
+                const html = response.getContentText();
+                if (html && html.length > 200) {
+                    const extracted = extractDeepContentFromHtml(html);
+                    if (extracted.bodyText || extracted.pdfNote) {
+                        const deepSnippet = `[Deep Ingestion / TOR Details]: ${extracted.bodyText}${extracted.pdfNote ? ' | ' + extracted.pdfNote : ''}`.trim();
+                        item.description = `${item.description ? item.description + '\n' : ''}${deepSnippet}`.trim();
+                        safeCachePut(cache, urlHash, deepSnippet, 21600);
+                        Logger.log(`[DEEP INGESTION] Enriched candidate "${item.title.substring(0, 45)}..." with ${extracted.bodyText.length} chars of scope context.`);
+                    }
+                }
+            }
+        } catch (fetchErr) {
+            Logger.log(`[DEEP INGESTION NOTE] Could not fetch ${item.link}: ${fetchErr.message}`);
+        }
+    }
+}
+
+function extractDeepContentFromHtml(html) {
+    let clean = html.replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<style[\s\S]*?<\/style>/gi, '')
+                    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+                    .replace(/<header[\s\S]*?<\/header>/gi, '')
+                    .replace(/<footer[\s\S]*?<\/footer>/gi, '');
+
+    // Extract attached PDF or DOC links
+    const docMatches = [];
+    const docRegex = /<a[^>]+href=["']([^"']+\.(?:pdf|docx?)(?:\?[^"']*)?)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let m;
+    while ((m = docRegex.exec(clean)) !== null) {
+        const link = m[1];
+        const text = m[2].replace(/<[^>]+>/g, '').trim();
+        const filename = link.split('/').pop().split('?')[0];
+        const label = text && text.length < 80 ? text : filename;
+        if (label && !docMatches.includes(label)) docMatches.push(label);
+        if (docMatches.length >= 3) break;
+    }
+
+    // Extract substantive paragraphs
+    const paragraphs = [];
+    const pRegex = /<(?:p|div class=["'][^"']*(?:content|body|description|overview|scope)[^"']*["'])[^>]*>([\s\S]*?)<\/(?:p|div)>/gi;
+    let pMatch;
+    while ((pMatch = pRegex.exec(clean)) !== null) {
+        const pText = pMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (pText.length > 35 && !paragraphs.includes(pText) && !looksLikeNavigationText(pText)) {
+            paragraphs.push(pText);
+        }
+        if (paragraphs.length >= 4) break;
+    }
+
+    const bodyText = paragraphs.join(' ').substring(0, 900);
+    const pdfNote = docMatches.length > 0 ? `Attached TOR / Documents: [${docMatches.join(', ')}]` : '';
+    return { bodyText, pdfNote };
+}
+
+function looksLikeNavigationText(text) {
+    return /^(?:home|about us|contact us|privacy policy|terms of use|cookie|copyright|all rights reserved|login|sign in|register)\b/i.test(text);
+}
+
+function hashString(str) {
+    let hash = 0;
+    if (!str) return hash;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
 }
 
 function evaluateRfpInChunks(candidates, chunkSize, runStartTime) {
@@ -4884,6 +5113,12 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
     - Select and evaluate the SINGLE highest-matching agricultural, seed, AgTech, or agribusiness opportunity within the compilation.
     - Your entire evaluation (score, closingDate, country, summary, specificOpportunityTitle) must focus exclusively on that single best-matching opportunity. Do NOT conflate different opportunities.
 
+    11. biddingModality & partnerStrategy:
+        Classify the optimal strategic bidding approach for Agri Experience Ltd:
+        - "LEAD_BIDDER": For focused advisory consultancies, seed policy and regulatory assessments, variety release frameworks, seed certification digital systems, AgTech extension studies, and targeted agricultural studies (e.g. AGRA, AATF, CIMMYT, ILRI, ASARECA, TradeMark Africa, national ministries). Agri Experience has world-class specialized domain leadership and should bid directly as the prime contractor / lead bidder. Set partnerStrategy to "Direct Prime Advisory Consultant" or specific local partner recommendations.
+        - "CONSORTIUM_PARTNER": For mega donor programs, multi-million dollar flagship initiatives (e.g. USAID Feed the Future broad vehicles, World Bank nationwide agricultural commercialization, FCDO economic growth facilities) where prime contractors (e.g. DAI, Chemonics, RTI International, Tetra Tech, TechnoServe, Palladium, ACDI/VOCA, Abt Associates) require a specialized Sub-Saharan African seed systems and agricultural policy partner. Set partnerStrategy to recommend specific prime contractors and Agri Experience's niche role (e.g. "Prime candidate: DAI / Chemonics / RTI; Agri Experience as Seed Systems & Policy Specialist").
+        - "NOT_APPLICABLE": When goNoGo is "NO-GO" or score < 40. Set partnerStrategy to "".
+
     Return ONLY the requested JSON structure. Do not invent dates, organizations, reference numbers, URLs, or scope details.
 
     `;
@@ -4921,7 +5156,9 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
                             score: { type: "INTEGER" },
                             pillar: { type: "STRING" },
                             summary: { type: "STRING" },
-                            specificOpportunityTitle: { type: "STRING" }
+                            specificOpportunityTitle: { type: "STRING" },
+                            biddingModality: { type: "STRING", enum: ["LEAD_BIDDER", "CONSORTIUM_PARTNER", "NOT_APPLICABLE"] },
+                            partnerStrategy: { type: "STRING" }
                         },
                         required: ["id", "isGenuineOpportunity", "isOpen", "closingDate", "businessFit", "confidence", "goNoGo", "score", "pillar", "summary"]
                     }
@@ -5498,13 +5735,63 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
     if (feedStats) feedStats.seen++;
     if (!rawTitle || !link) return;
     const cleanLink = canonicalizeUrl(link);
+    const title = decodeHtmlEntities(normalizeStylizedUnicodeText(rawTitle));
+    const description = decodeHtmlEntities(normalizeStylizedUnicodeText(rawDescription));
+    const combinedText = `${title} ${description || ''} ${link}`.toLowerCase();
+
+    // Enhancement 5: Addendum & Deadline Extension Detector
+    const isAddendumSignal = /\b(?:addendum(?:\s+(?:no\.?|number)?\s*\d+)?|corrigendum|deadline\s+exten(?:sion|ded)|extended\s+deadline|extension\s+of\s+submission|amendment(?:\s+(?:no\.?|number)?\s*\d+)?)\b/i.test(combinedText);
+    const refCode = extractProcurementRefCode(link, title);
+
+    if (isAddendumSignal && existingLinks && existingLinks.sheet) {
+        let matchedRow = null;
+        if (refCode && existingLinks.refCodeRowMap && existingLinks.refCodeRowMap.has(refCode)) {
+            matchedRow = existingLinks.refCodeRowMap.get(refCode);
+        } else if (existingLinks.titleRowMap) {
+            const titleKey = normalizeTitleKey(title);
+            if (existingLinks.titleRowMap.has(titleKey)) {
+                matchedRow = existingLinks.titleRowMap.get(titleKey);
+            }
+        }
+
+        if (matchedRow) {
+            // Found existing tracked opportunity matching this addendum/extension!
+            const closingCheck = heuristicClosingCheck(combinedText);
+            const newClosingDate = closingCheck && closingCheck.closingDate !== 'Not Specified' ? closingCheck.closingDate : null;
+
+            if (newClosingDate && newClosingDate !== matchedRow.closingDate) {
+                try {
+                    // Update Closing Date (Col 6)
+                    existingLinks.sheet.getRange(matchedRow.rowNumber, 6).setValue(newClosingDate);
+                    // Update Status (Col 5)
+                    existingLinks.sheet.getRange(matchedRow.rowNumber, 5).setValue('OPEN (Extended)')
+                        .setBackground('#c8e6c9').setFontColor('#1b5e20');
+                    // Update Executive Summary (Col 10)
+                    const currentSummary = matchedRow.summary || '';
+                    if (!currentSummary.includes('Deadline extended')) {
+                        const updatedSummary = `[Deadline extended to ${newClosingDate} per Addendum] ${currentSummary}`.substring(0, 1000);
+                        existingLinks.sheet.getRange(matchedRow.rowNumber, 10).setValue(updatedSummary);
+                    }
+                    Logger.log(`[ADDENDUM DETECTED] Opportunity "${matchedRow.title}" (Ref: ${refCode || 'N/A'}) deadline extended to ${newClosingDate}. Updated row ${matchedRow.rowNumber}.`);
+                    if (feedStats) feedStats.duplicate++;
+                    return;
+                } catch (addendumErr) {
+                    Logger.log(`[ADDENDUM ERROR] Failed to update row ${matchedRow.rowNumber}: ${addendumErr.message}`);
+                }
+            } else {
+                Logger.log(`[ADDENDUM NOTE] Matched addendum for "${matchedRow.title}" (Row ${matchedRow.rowNumber}), but no new deadline date extracted. Preserving logged opportunity.`);
+                if (feedStats) feedStats.duplicate++;
+                return;
+            }
+        }
+    }
+
     if (existingLinks.has(cleanLink) || existingLinks.has(link)) {
         if (feedStats) feedStats.duplicate++;
 
         return;
     }
 
-    const refCode = extractProcurementRefCode(link, rawTitle);
     if (refCode && existingLinks.refCodes && existingLinks.refCodes.has(refCode)) {
         if (feedStats) feedStats.duplicate++;
 
@@ -5517,15 +5804,11 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
         return;
     }
 
-    const title = decodeHtmlEntities(normalizeStylizedUnicodeText(rawTitle));
-    const description = decodeHtmlEntities(normalizeStylizedUnicodeText(rawDescription));
     if (looksLikeNonListingBoilerplate(title, link, listingPageUrl, description)) {
         if (feedStats) { feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
 
         return;
     }
-
-    const combinedText = `${title} ${description || ''} ${link}`.toLowerCase();
 
     // Social Media Gatekeeper: Discard social posts lacking explicit procurement keywords
     const isSocialSource = /facebook|linkedin|twitter|\bx\.com\b/i.test(sourceName) || /(?:facebook\.com|linkedin\.com|twitter\.com|x\.com)/i.test(link);
@@ -5795,7 +6078,10 @@ function generateFallbackBatch(batchItems) {
             goNoGo: heuristic.goNoGo,
             score: heuristic.score,
             pillar: heuristic.pillar,
-            summary: heuristic.summary
+            summary: heuristic.summary,
+            specificOpportunityTitle: null,
+            biddingModality: heuristic.biddingModality,
+            partnerStrategy: heuristic.partnerStrategy
         };
     });
 }
@@ -5839,6 +6125,19 @@ function heuristicEvaluateCandidate(item) {
         ? `${item.title}. Heuristic screening could not verify this as a specific actionable procurement solicitation, so it was not promoted to the active RFP list.`
 
         : `${item.title}. AI evaluation was unavailable, so the opportunity was conservatively screened using procurement, relevance, and closing-date heuristics and requires manual review.`;
+
+    let biddingModality = 'NOT_APPLICABLE';
+    let partnerStrategy = '';
+    if (score >= 60 && goNoGo !== 'NO-GO') {
+        if (/usaid|world bank|feed the future|multi-million|consortium|prime|large-scale|nationwide/i.test(text)) {
+            biddingModality = 'CONSORTIUM_PARTNER';
+            partnerStrategy = 'Prime candidate: DAI / Chemonics / RTI; AE as Seed Systems & Policy Specialist';
+        } else {
+            biddingModality = 'LEAD_BIDDER';
+            partnerStrategy = 'Direct Prime Advisory Consultant';
+        }
+    }
+
     return {
         isGenuineOpportunity: isGenuine,
         isOpen: isGenuine ? closing.isOpen : false,
@@ -5848,7 +6147,9 @@ function heuristicEvaluateCandidate(item) {
         goNoGo,
         score,
         pillar,
-        summary
+        summary,
+        biddingModality,
+        partnerStrategy
     };
 }
 
@@ -6346,7 +6647,7 @@ function getOrCreateSheet() {
             try { ss.deleteSheet(defaultSheet); } catch (e) { }
         }
 
-        const headers = ['Date Logged', 'Source Portal', 'Opportunity Title', 'Link', 'Status', 'Closing Date', 'AI Recommendation', 'Match Score (%)', 'Pillar', 'Executive Summary', 'Country'];
+        const headers = ['Date Logged', 'Source Portal', 'Opportunity Title', 'Link', 'Status', 'Closing Date', 'AI Recommendation', 'Match Score (%)', 'Pillar', 'Executive Summary', 'Country', 'Bidding Modality'];
         sheet.appendRow(headers);
         const headerRange = sheet.getRange(1, 1, 1, headers.length);
         headerRange.setFontWeight('bold').setBackground('#1b5e20').setFontColor('#ffffff').setWrap(true);
@@ -6362,6 +6663,7 @@ function getOrCreateSheet() {
         sheet.setColumnWidth(9, 180);
         sheet.setColumnWidth(10, 350);
         sheet.setColumnWidth(11, 160);
+        sheet.setColumnWidth(12, 220);
         sheet.getRange(1, 4, sheet.getMaxRows(), 1).setNumberFormat('@STRING@');
         scriptProps.setProperty('LINK_COLUMN_FORMATTED', 'true');
     }
@@ -6373,13 +6675,19 @@ function getOrCreateSheet() {
     }
 
     // Auto-migrate: Ensure Country header exists at column 11 if sheet already existed
-
     if (sheet.getLastColumn() >= 10 && sheet.getRange(1, 10).getValue() === 'Executive Summary' && (sheet.getLastColumn() < 11 || !sheet.getRange(1, 11).getValue())) {
         sheet.getRange(1, 11).setValue('Country')
-
             .setFontWeight('bold').setBackground('#1b5e20').setFontColor('#ffffff').setWrap(true);
         sheet.setColumnWidth(11, 160);
         Logger.log('[Sheet Migration] Added "Country" column to Active Open RFPs at Column 11.');
+    }
+
+    // Auto-migrate: Ensure Bidding Modality header exists at column 12 if sheet already existed
+    if (sheet.getLastColumn() >= 11 && sheet.getRange(1, 11).getValue() === 'Country' && (sheet.getLastColumn() < 12 || !sheet.getRange(1, 12).getValue())) {
+        sheet.getRange(1, 12).setValue('Bidding Modality')
+            .setFontWeight('bold').setBackground('#1b5e20').setFontColor('#ffffff').setWrap(true);
+        sheet.setColumnWidth(12, 220);
+        Logger.log('[Sheet Migration] Added "Bidding Modality" column to Active Open RFPs at Column 12.');
     }
 
     return sheet;
@@ -6603,6 +6911,10 @@ function sendEmailAlertsForHighPriorityMatches(matches, sheet) {
             <tr>
               <td style="color: #64748B; font-weight: 600;">Submission Deadline:</td>
               <td style="color: #0F172A; font-weight: 700;">${escapeHtml(m.closingDate || 'Not Specified')}</td>
+            </tr>
+            <tr>
+              <td style="color: #64748B; font-weight: 600;">Bidding Modality:</td>
+              <td style="color: ${FOREST_GREEN}; font-weight: 700;">${escapeHtml(m.biddingModality || 'Lead Bidder (Prime)')}</td>
             </tr>
           </table>
 
@@ -7126,13 +7438,30 @@ function getExistingLinksAndTitleKeys(sheet) {
     const links = new Set();
     const titleKeys = new Set();
     const refCodes = new Set();
-    if (lastRow < 2) return { links, titleKeys, refCodes };
+    const refCodeRowMap = new Map();
+    const titleRowMap = new Map();
+    if (lastRow < 2) return { links, titleKeys, refCodes, refCodeRowMap, titleRowMap };
     const startRow = Math.max(2, lastRow - CONFIG.EXISTING_ROWS_LOOKBACK + 1);
     const numRows = lastRow - startRow + 1;
-    const values = sheet.getRange(startRow, 3, numRows, 2).getValues();
-    values.forEach(row => {
+    // Read Col 3 (Title) to Col 10 (Executive Summary) = 8 columns
+    const values = sheet.getRange(startRow, 3, numRows, 8).getValues();
+    values.forEach((row, idx) => {
+        const actualRowNumber = startRow + idx;
         const title = row[0];
         const link = row[1];
+        const status = row[2];
+        const closingDate = row[3];
+        const summary = row[7];
+
+        const rowData = {
+            rowNumber: actualRowNumber,
+            title: title ? String(title).trim() : '',
+            link: link ? String(link).trim() : '',
+            status: status ? String(status).trim() : '',
+            closingDate: closingDate ? String(closingDate).trim() : '',
+            summary: summary ? String(summary).trim() : ''
+        };
+
         if (link) {
             const canonical = canonicalizeUrl(link);
             const isGenericOracleListing = canonical.includes('oraclecloud.com') && !canonical.includes('auction');
@@ -7142,11 +7471,18 @@ function getExistingLinksAndTitleKeys(sheet) {
             }
         }
 
-        if (title) titleKeys.add(normalizeTitleKey(title));
+        if (title) {
+            const tKey = normalizeTitleKey(title);
+            titleKeys.add(tKey);
+            titleRowMap.set(tKey, rowData);
+        }
         const refCode = extractProcurementRefCode(link, title);
-        if (refCode) refCodes.add(refCode);
+        if (refCode) {
+            refCodes.add(refCode);
+            refCodeRowMap.set(refCode, rowData);
+        }
     });
-    return { links, titleKeys, refCodes };
+    return { links, titleKeys, refCodes, refCodeRowMap, titleRowMap };
 }
 
 function evaluateWithFreeProvider(batchItems, basePrompt) {
@@ -7159,7 +7495,8 @@ function evaluateWithFreeProvider(batchItems, basePrompt) {
       {"id": <integer>, "isGenuineOpportunity": <true|false>, "isOpen": <true|false>,
        "closingDate": "<string>", "businessFit": "HIGH"|"MEDIUM"|"LOW"|"NONE", "confidence": <integer 0-100>,
        "goNoGo": "GO"|"MAYBE"|"NO-GO", "score": <integer 0-100>,
-       "pillar": "<string>", "summary": "<string>", "specificOpportunityTitle": "<string>"}
+       "pillar": "<string>", "summary": "<string>", "specificOpportunityTitle": "<string>",
+       "biddingModality": "LEAD_BIDDER"|"CONSORTIUM_PARTNER"|"NOT_APPLICABLE", "partnerStrategy": "<string>"}
     ]}
 
     MANDATORY COMPLETENESS REQUIREMENT:
