@@ -1482,7 +1482,7 @@ function runRfpTrackerV4() {
         const isExplicitlyNonAfrican = isUrlExplicitlyNonAfrican || isRegionExplicitlyNonAfrican;
         if (isExplicitlyNonAfrican) {
             Logger.log(`[Geography Gate] Filtered non-African opportunity: "${item.title}"`);
-            const oppCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link);
+            const oppCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link, item.source, evalResult.country);
             filteredRowsToAppend.push([
                 now,
                 item.source,
@@ -1502,7 +1502,7 @@ function runRfpTrackerV4() {
         const isLowFitOrNoGo = evalResult.goNoGo === 'NO-GO' || (evalResult.score !== undefined && evalResult.score < minActiveScore);
         if (isLowFitOrNoGo) {
             Logger.log(`[AI LOW-FIT/FILTERED] ${item.source} | ${item.title} | score=${evalResult.score} | goNoGo=${evalResult.goNoGo} | reason=Outside Core Focus`);
-            const oppCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link);
+            const oppCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link, item.source, evalResult.country);
             filteredRowsToAppend.push([
                 now,
                 item.source,
@@ -1516,15 +1516,16 @@ function runRfpTrackerV4() {
             return;
         }
 
-        const opportunityCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link);
-        let formattedModality = 'N/A';
-        if (evalResult.biddingModality === 'LEAD_BIDDER') {
-            formattedModality = 'LEAD BIDDER (Prime)';
-        } else if (evalResult.biddingModality === 'CONSORTIUM_PARTNER') {
-            formattedModality = `CONSORTIUM (${evalResult.partnerStrategy || 'Partner with Prime'})`;
-        } else if (evalResult.goNoGo === 'GO' || (evalResult.score && evalResult.score >= 60)) {
-            formattedModality = 'LEAD BIDDER (Prime)';
-        }
+        const opportunityCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link, item.source, evalResult.country);
+        const formattedModality = resolveBiddingModality(
+            evalResult.biddingModality,
+            evalResult.partnerStrategy,
+            evalResult.score,
+            evalResult.goNoGo,
+            item.title,
+            item.description || evalResult.summary,
+            item.source
+        );
 
         mainRowsToAppend.push([
             now,
@@ -4626,35 +4627,49 @@ function auditTrackedOpportunitiesStatus(sheet) {
     try {
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
-        // Range spans Col 3 (Title) to Col 10 (Executive Summary) = 8 columns
-        const range = sheet.getRange(2, 3, lastRow - 1, 8);
-        const values = range.getValues();
+        const totalCols = Math.max(sheet.getLastColumn(), 12);
+        const fullRange = sheet.getRange(2, 1, lastRow - 1, totalCols);
+        const fullValues = fullRange.getValues();
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         let updatedCount = 0;
+        let countryBackfillCount = 0;
+        let modalityBackfillCount = 0;
+        let legacyContradictionsModified = false;
 
-        const numRows = values.length;
+        const numRows = fullValues.length;
         const newStatuses = [];
         const newBgs = [];
         const newFontColors = [];
+        const newCountries = [];
+        const newModalities = [];
 
         for (let i = 0; i < numRows; i++) {
-            const title = String(values[i][0] || '');
-            let status = String(values[i][2] || 'OPEN'); // Col 5: Status
-            const closing = values[i][3]; // Col 6: Closing Date
-            const summary = String(values[i][7] || ''); // Col 10: Executive Summary
+            const source = String(fullValues[i][1] || '');
+            const title = String(fullValues[i][2] || '');
+            const link = String(fullValues[i][3] || '');
+            let status = String(fullValues[i][4] || 'OPEN'); // Col 5: Status
+            const closing = fullValues[i][5]; // Col 6: Closing Date
+            const goNoGo = String(fullValues[i][6] || ''); // Col 7: Recommendation
+            const score = Number(fullValues[i][7]) || 0; // Col 8: Score
+            const summary = String(fullValues[i][9] || ''); // Col 10: Summary
+            let country = String(fullValues[i][10] || '').trim(); // Col 11: Country
+            let modality = String(fullValues[i][11] || '').trim(); // Col 12: Bidding Modality
 
             // 1. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds)
             const isLegacyContradiction = /\b(?:personal social media advertisement|vendor offering services rather than|focuses (?:primarily )?on the medical sector|medical sector rather than agriculture|completely unrelated to agriculture|homestead garden[-_\s]+crop seeds)\b/i.test(summary) ||
                 /\b(?:homestead garden[-_\s]+crop seeds)\b/i.test(title);
 
             if (isLegacyContradiction) {
-                values[i][2] = 'CLOSED / EXPIRED';
-                values[i][4] = 'NO-GO'; // Col 7: AI Recommendation
-                values[i][5] = 0;       // Col 8: Match Score (%)
+                fullValues[i][4] = 'CLOSED / EXPIRED';
+                fullValues[i][6] = 'NO-GO'; // Col 7: AI Recommendation
+                fullValues[i][7] = 0;       // Col 8: Match Score (%)
                 newStatuses.push(['CLOSED / EXPIRED']);
                 newBgs.push(['#f5f5f5']);
                 newFontColors.push(['#757575']);
+                newCountries.push([country || 'Sub-Saharan Africa']);
+                newModalities.push(['NOT_APPLICABLE']);
+                legacyContradictionsModified = true;
                 updatedCount++;
                 Logger.log(`[Maintenance] Retired legacy contradictory notice in row ${i + 2}: "${title}"`);
                 continue;
@@ -4707,6 +4722,22 @@ function auditTrackedOpportunitiesStatus(sheet) {
                     newFontColors.push(['#2e7d32']);
                 }
             }
+
+            // 3. Auto-Audit & Backfill Country (Col 11)
+            if (!country || country.toLowerCase() === 'unspecified' || country.toLowerCase() === 'not specified') {
+                country = extractOpportunityCountries(title, '', summary, link, source);
+                fullValues[i][10] = country;
+                countryBackfillCount++;
+            }
+            newCountries.push([country]);
+
+            // 4. Auto-Audit & Backfill Bidding Modality (Col 12)
+            if (!modality || modality === 'N/A' || modality.toLowerCase() === 'unspecified' || modality.toLowerCase() === 'not specified') {
+                modality = resolveBiddingModality(null, null, score, goNoGo, title, summary, source);
+                fullValues[i][11] = modality;
+                modalityBackfillCount++;
+            }
+            newModalities.push([modality]);
         }
 
         // Batch update Status column (Col 5)
@@ -4715,9 +4746,21 @@ function auditTrackedOpportunitiesStatus(sheet) {
         statusRange.setBackgrounds(newBgs);
         statusRange.setFontColors(newFontColors);
 
+        // Batch update Country column (Col 11)
+        if (countryBackfillCount > 0) {
+            sheet.getRange(2, 11, numRows, 1).setValues(newCountries);
+            Logger.log(`[Maintenance] Successfully backfilled ${countryBackfillCount} missing/unspecified Country cell(s) in Active sheet.`);
+        }
+
+        // Batch update Bidding Modality column (Col 12)
+        if (modalityBackfillCount > 0) {
+            sheet.getRange(2, 12, numRows, 1).setValues(newModalities);
+            Logger.log(`[Maintenance] Successfully backfilled ${modalityBackfillCount} missing/N/A Bidding Modality cell(s) in Active sheet.`);
+        }
+
         // If legacy contradictions were modified, write back columns 3-10
-        if (values.some(v => v[4] === 'NO-GO' && v[5] === 0)) {
-            range.setValues(values);
+        if (legacyContradictionsModified) {
+            sheet.getRange(2, 3, numRows, 8).setValues(fullValues.map(r => r.slice(2, 10)));
         }
 
         if (updatedCount > 0) {
@@ -5176,6 +5219,9 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
         - "CONSORTIUM_PARTNER": For mega donor programs, multi-million dollar flagship initiatives (e.g. USAID Feed the Future broad vehicles, World Bank nationwide agricultural commercialization, FCDO economic growth facilities) where prime contractors (e.g. DAI, Chemonics, RTI International, Tetra Tech, TechnoServe, Palladium, ACDI/VOCA, Abt Associates) require a specialized Sub-Saharan African seed systems and agricultural policy partner. Set partnerStrategy to recommend specific prime contractors and Agri Experience's niche role (e.g. "Prime candidate: DAI / Chemonics / RTI; Agri Experience as Seed Systems & Policy Specialist").
         - "NOT_APPLICABLE": When goNoGo is "NO-GO" or score < 40. Set partnerStrategy to "".
 
+    12. country:
+        Target geographic country or region for this opportunity (e.g. "Kenya", "Rwanda", "Uganda", "Tanzania", "Ethiopia", "Nigeria", "Ghana", "Mali", "Malawi", "Zambia", "Zimbabwe", "DR Congo", "Senegal", "Côte d'Ivoire", "South Sudan", "Somalia", "Sub-Saharan Africa", or "Africa (Pan-African)"). If multiple countries are mentioned, list them separated by commas. Never return "Unspecified" or empty.
+
     Return ONLY the requested JSON structure. Do not invent dates, organizations, reference numbers, URLs, or scope details.
 
     `;
@@ -5214,10 +5260,11 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
                             pillar: { type: "STRING" },
                             summary: { type: "STRING" },
                             specificOpportunityTitle: { type: "STRING" },
+                            country: { type: "STRING" },
                             biddingModality: { type: "STRING", enum: ["LEAD_BIDDER", "CONSORTIUM_PARTNER", "NOT_APPLICABLE"] },
                             partnerStrategy: { type: "STRING" }
                         },
-                        required: ["id", "isGenuineOpportunity", "isOpen", "closingDate", "businessFit", "confidence", "goNoGo", "score", "pillar", "summary"]
+                        required: ["id", "isGenuineOpportunity", "isOpen", "closingDate", "businessFit", "confidence", "goNoGo", "score", "pillar", "summary", "country", "biddingModality"]
                     }
                 }
             }
@@ -6183,17 +6230,17 @@ function heuristicEvaluateCandidate(item) {
 
         : `${item.title}. AI evaluation was unavailable, so the opportunity was conservatively screened using procurement, relevance, and closing-date heuristics and requires manual review.`;
 
-    let biddingModality = 'NOT_APPLICABLE';
-    let partnerStrategy = '';
-    if (score >= 60 && goNoGo !== 'NO-GO') {
-        if (/usaid|world bank|feed the future|multi-million|consortium|prime|large-scale|nationwide/i.test(text)) {
-            biddingModality = 'CONSORTIUM_PARTNER';
-            partnerStrategy = 'Prime candidate: DAI / Chemonics / RTI; AE as Seed Systems & Policy Specialist';
-        } else {
-            biddingModality = 'LEAD_BIDDER';
-            partnerStrategy = 'Direct Prime Advisory Consultant';
-        }
+    let biddingModality = 'LEAD_BIDDER';
+    let partnerStrategy = 'Direct Prime Advisory Consultant';
+    if (/usaid|world bank|feed the future|multi-million|consortium|prime|large-scale|nationwide|facility/i.test(text)) {
+        biddingModality = 'CONSORTIUM_PARTNER';
+        partnerStrategy = 'Prime candidate: DAI / Chemonics / RTI; AE as Seed Systems & Policy Specialist';
+    } else if (goNoGo === 'NO-GO' || score < 40) {
+        biddingModality = 'NOT_APPLICABLE';
+        partnerStrategy = '';
     }
+
+    const detectedCountry = extractOpportunityCountries(item.title, item.description, '', item.link, item.source);
 
     return {
         isGenuineOpportunity: isGenuine,
@@ -6205,9 +6252,26 @@ function heuristicEvaluateCandidate(item) {
         score,
         pillar,
         summary,
+        country: detectedCountry,
         biddingModality,
         partnerStrategy
     };
+}
+
+function resolveBiddingModality(biddingModality, partnerStrategy, score, goNoGo, title, description, source) {
+    if (biddingModality === 'CONSORTIUM_PARTNER') {
+        return `CONSORTIUM (${partnerStrategy || 'Partner with Prime'})`;
+    }
+    if (biddingModality === 'LEAD_BIDDER') {
+        return 'LEAD BIDDER (Prime)';
+    }
+
+    const combined = `${title || ''} ${description || ''} ${source || ''}`.toLowerCase();
+    const isConsortiumType = /\b(usaid|world bank|feed the future|multi-million|consortium|prime contractor|large-scale|nationwide|facility|commercialization program|global fund|horizon europe)\b/i.test(combined);
+    if (isConsortiumType) {
+        return 'CONSORTIUM (Partner with Prime)';
+    }
+    return 'LEAD BIDDER (Prime)';
 }
 
 function heuristicClosingCheck(description) {
@@ -6736,20 +6800,20 @@ function getOrCreateSheet() {
         Logger.log('[Sheet Fix] Applied plain-text formatting to the Link column to prevent smart-chip URL display. This runs once.');
     }
 
-    // Auto-migrate: Ensure Country header exists at column 11 if sheet already existed
-    if (sheet.getLastColumn() >= 10 && sheet.getRange(1, 10).getValue() === 'Executive Summary' && (sheet.getLastColumn() < 11 || !sheet.getRange(1, 11).getValue())) {
+    // Auto-migrate: Ensure Country header exists at column 11
+    if (sheet.getLastColumn() >= 10 && (sheet.getLastColumn() < 11 || !sheet.getRange(1, 11).getValue() || sheet.getRange(1, 11).getValue() !== 'Country')) {
         sheet.getRange(1, 11).setValue('Country')
             .setFontWeight('bold').setBackground('#1b5e20').setFontColor('#ffffff').setWrap(true);
         sheet.setColumnWidth(11, 160);
-        Logger.log('[Sheet Migration] Added "Country" column to Active Open RFPs at Column 11.');
+        Logger.log('[Sheet Migration] Ensured "Country" column exists in Active Open RFPs at Column 11.');
     }
 
-    // Auto-migrate: Ensure Bidding Modality header exists at column 12 if sheet already existed
-    if (sheet.getLastColumn() >= 11 && sheet.getRange(1, 11).getValue() === 'Country' && (sheet.getLastColumn() < 12 || !sheet.getRange(1, 12).getValue())) {
+    // Auto-migrate: Ensure Bidding Modality header exists at column 12
+    if (sheet.getLastColumn() >= 10 && (sheet.getLastColumn() < 12 || !sheet.getRange(1, 12).getValue() || sheet.getRange(1, 12).getValue() !== 'Bidding Modality')) {
         sheet.getRange(1, 12).setValue('Bidding Modality')
             .setFontWeight('bold').setBackground('#1b5e20').setFontColor('#ffffff').setWrap(true);
         sheet.setColumnWidth(12, 220);
-        Logger.log('[Sheet Migration] Added "Bidding Modality" column to Active Open RFPs at Column 12.');
+        Logger.log('[Sheet Migration] Ensured "Bidding Modality" column exists in Active Open RFPs at Column 12.');
     }
 
     return sheet;
@@ -6788,14 +6852,12 @@ function getOrCreateFilteredSheet() {
         scriptProps.setProperty('FILTERED_LINK_COLUMN_FORMATTED', 'true');
     }
 
-    // Auto-migrate: Ensure Country header exists at column 6 if sheet already existed
-
-    if (sheet.getLastColumn() >= 5 && sheet.getRange(1, 5).getValue() === 'Why It Was Filtered Out' && (sheet.getLastColumn() < 6 || !sheet.getRange(1, 6).getValue())) {
+    // Auto-migrate: Ensure Country header exists at column 6
+    if (sheet.getLastColumn() >= 5 && (sheet.getLastColumn() < 6 || !sheet.getRange(1, 6).getValue() || sheet.getRange(1, 6).getValue() !== 'Country')) {
         sheet.getRange(1, 6).setValue('Country')
-
             .setFontWeight('bold').setBackground('#616161').setFontColor('#ffffff').setWrap(true);
         sheet.setColumnWidth(6, 160);
-        Logger.log('[Sheet Migration] Added "Country" column to Filtered Out sheet at Column 6.');
+        Logger.log('[Sheet Migration] Ensured "Country" column exists in Filtered Out sheet at Column 6.');
     }
 
     return sheet;
@@ -7267,18 +7329,68 @@ const REGIONAL_TERMS_MAP = {
     'sadc': 'SADC Region',
     'eac': 'EAC Region'
 };
-function extractOpportunityCountries(title, description, summary, link) {
-    const combined = `${title || ''} ${description || ''} ${summary || ''} ${link || ''}`;
-    if (!combined.trim()) return 'Unspecified';
+
+const CITY_TO_COUNTRY = {
+    'nairobi': 'Kenya', 'mombasa': 'Kenya', 'eldoret': 'Kenya', 'kisumu': 'Kenya', 'nakuru': 'Kenya',
+    'kigali': 'Rwanda', 'huye': 'Rwanda', 'musanze': 'Rwanda',
+    'kampala': 'Uganda', 'entebbe': 'Uganda', 'gulu': 'Uganda', 'mbarara': 'Uganda', 'jinja': 'Uganda',
+    'dar es salaam': 'Tanzania', 'dodoma': 'Tanzania', 'arusha': 'Tanzania', 'mwanza': 'Tanzania', 'morogoro': 'Tanzania', 'zanzibar': 'Tanzania',
+    'addis ababa': 'Ethiopia', 'addis': 'Ethiopia', 'hawassa': 'Ethiopia', 'bahir dar': 'Ethiopia',
+    'abuja': 'Nigeria', 'lagos': 'Nigeria', 'kano': 'Nigeria', 'ibadan': 'Nigeria', 'kaduna': 'Nigeria', 'port harcourt': 'Nigeria', 'enugu': 'Nigeria',
+    'accra': 'Ghana', 'kumasi': 'Ghana', 'tamale': 'Ghana',
+    'dakar': 'Senegal', 'saint-louis': 'Senegal', 'thies': 'Senegal',
+    'abidjan': "Côte d'Ivoire", 'yamoussoukro': "Côte d'Ivoire", 'bouake': "Côte d'Ivoire",
+    'lilongwe': 'Malawi', 'blantyre': 'Malawi', 'mzuzu': 'Malawi',
+    'lusaka': 'Zambia', 'ndola': 'Zambia', 'kitwe': 'Zambia',
+    'harare': 'Zimbabwe', 'bulawayo': 'Zimbabwe',
+    'maputo': 'Mozambique', 'beira': 'Mozambique', 'nampula': 'Mozambique',
+    'bamako': 'Mali', 'segou': 'Mali', 'sikasso': 'Mali',
+    'ouagadougou': 'Burkina Faso', 'bobo-dioulasso': 'Burkina Faso',
+    'niamey': 'Niger', 'maradi': 'Niger',
+    'conakry': 'Guinea',
+    'cotonou': 'Benin', 'porto-novo': 'Benin',
+    'lome': 'Togo',
+    'yaounde': 'Cameroon', 'douala': 'Cameroon',
+    'kinshasa': 'DR Congo', 'lubumbashi': 'DR Congo', 'goma': 'DR Congo',
+    'juba': 'South Sudan',
+    'mogadishu': 'Somalia', 'hargeisa': 'Somalia'
+};
+
+const ENTITY_TO_REGION = {
+    'iita': 'Nigeria / Sub-Saharan Africa',
+    'ilri': 'Kenya / Sub-Saharan Africa',
+    'cimmyt': 'Sub-Saharan Africa',
+    'aatf': 'Kenya / Sub-Saharan Africa',
+    'agra': 'Sub-Saharan Africa',
+    'asareca': 'Eastern & Central Africa',
+    'coraf': 'West & Central Africa',
+    'comesa': 'COMESA Region',
+    'eac': 'EAC Region',
+    'sadc': 'SADC Region',
+    'ecowas': 'ECOWAS Region',
+    'igad': 'Horn of Africa / IGAD Region',
+    'tendersure': 'Kenya / East Africa',
+    'afdb': 'Africa (Pan-African)',
+    'ifad': 'Sub-Saharan Africa'
+};
+
+function extractOpportunityCountries(title, description, summary, link, source, aiCountry) {
+    if (aiCountry && typeof aiCountry === 'string') {
+        const cleanAi = aiCountry.trim();
+        if (cleanAi && !/^(?:unspecified|not specified|none|n\/a|unknown)$/i.test(cleanAi)) {
+            return cleanAi;
+        }
+    }
+
+    const combined = `${title || ''} ${description || ''} ${summary || ''} ${link || ''} ${source || ''}`;
+    if (!combined.trim()) return 'Sub-Saharan Africa';
     const lower = combined
-
         .normalize('NFD')
-
         .replace(/[\u0300-\u036f]/g, '')
-
         .replace(/[\u2018\u2019]/g, "'")
-
         .toLowerCase();
+
+    // 1. Check explicit country display names
     const countryKeys = Object.keys(COUNTRY_DISPLAY_NAMES).sort((a, b) => b.length - a.length);
     const matchedRanges = [];
     const foundNames = new Set();
@@ -7300,6 +7412,14 @@ function extractOpportunityCountries(title, description, summary, link) {
         return Array.from(foundNames).sort().join(', ');
     }
 
+    // 2. Check major capital cities and commercial hubs
+    for (const [city, country] of Object.entries(CITY_TO_COUNTRY)) {
+        if (new RegExp(`\\b${escapeRegex(city)}\\b`, 'i').test(lower)) {
+            return country;
+        }
+    }
+
+    // 3. Check regional economic communities and trading blocs
     const foundRegions = new Set();
     const regionKeys = Object.keys(REGIONAL_TERMS_MAP).sort((a, b) => b.length - a.length);
     for (const key of regionKeys) {
@@ -7313,7 +7433,14 @@ function extractOpportunityCountries(title, description, summary, link) {
         return Array.from(foundRegions).sort().join(', ');
     }
 
-    // Recognize explicit non-African territories before defaulting to Pan-African
+    // 4. Check pan-African institutions and development bodies
+    for (const [entity, region] of Object.entries(ENTITY_TO_REGION)) {
+        if (new RegExp(`\\b${escapeRegex(entity)}\\b`, 'i').test(lower)) {
+            return region;
+        }
+    }
+
+    // 5. Recognize explicit non-African territories before defaulting to Pan-African
     if (/(?:barbados|undpbarbadosec|st[\s._-]?kitts|nevis|caribbean|eastern caribbean)/i.test(lower)) {
         return 'Barbados / Caribbean';
     }
@@ -7325,7 +7452,21 @@ function extractOpportunityCountries(title, description, summary, link) {
         return 'Africa (Pan-African)';
     }
 
-    return 'Unspecified';
+    // 6. Source portal fallbacks
+    if (source) {
+        const sLower = source.toLowerCase();
+        if (sLower.includes('tendersure')) return 'Kenya / East Africa';
+        if (sLower.includes('asareca')) return 'Eastern & Central Africa';
+        if (sLower.includes('agra')) return 'Sub-Saharan Africa';
+        if (sLower.includes('ilri')) return 'Kenya / Sub-Saharan Africa';
+        if (sLower.includes('aatf')) return 'Kenya / Sub-Saharan Africa';
+        if (sLower.includes('cimmyt')) return 'Sub-Saharan Africa';
+        if (sLower.includes('afdb')) return 'Africa (Pan-African)';
+        if (sLower.includes('ifad')) return 'Sub-Saharan Africa';
+        if (sLower.includes('all business africa')) return 'Africa (Pan-African)';
+    }
+
+    return 'Sub-Saharan Africa';
 }
 
 function isAfricaRelated(text) {
@@ -7593,6 +7734,7 @@ function evaluateWithFreeProvider(batchItems, basePrompt) {
        "closingDate": "<string>", "businessFit": "HIGH"|"MEDIUM"|"LOW"|"NONE", "confidence": <integer 0-100>,
        "goNoGo": "GO"|"MAYBE"|"NO-GO", "score": <integer 0-100>,
        "pillar": "<string>", "summary": "<string>", "specificOpportunityTitle": "<string>",
+       "country": "<string, e.g. Kenya, Nigeria, or Sub-Saharan Africa>",
        "biddingModality": "LEAD_BIDDER"|"CONSORTIUM_PARTNER"|"NOT_APPLICABLE", "partnerStrategy": "<string>"}
     ]}
 
