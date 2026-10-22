@@ -445,14 +445,8 @@ const CONFIG = {
   `,
     WORLD_BANK_SEARCH_TERMS: [
         'seed',
-        'seed systems',
         'agribusiness',
-        'crops',
-        'planting materials',
-        'biosafety',
-        'agricultural policy',
-        'agricultural extension',
-        'semences'
+        'agricultural policy'
     ],
     FEEDS: [
         // =========================================================================
@@ -506,6 +500,15 @@ const CONFIG = {
             baseUrl: 'https://www.ilri.org',
             enabled: true,
             assumeAfrican: true
+        },
+        {
+            name: 'ASARECA Consultancies & EOIs',
+            type: 'ASARECA_REST_API',
+            url: 'https://www.asareca.org/wp-json/wp/v2/posts?categories=90&per_page=20',
+            baseUrl: 'https://www.asareca.org',
+            enabled: true,
+            assumeAfrican: true,
+            preferSerperFallback: false
         },
         {
             name: 'FundsforNGOs Grants & Calls for Proposals',
@@ -590,7 +593,7 @@ const CONFIG = {
             baseUrl: 'https://www.ungm.org',
             url: 'https://www.ungm.org/Public/Notice',
             enabled: true,
-            searchKeywords: ['seed', 'agribusiness', 'crops', 'agtech', 'seed systems', 'planting material', 'semences', 'capacity building']
+            searchKeywords: ['seed', 'agribusiness', 'semences', 'capacity building']
         },
         {
             name: 'UNJobNet Consultancies & EOIs',
@@ -606,21 +609,6 @@ const CONFIG = {
         // TIER 3: OPEN WEB & SOCIAL MEDIA DISCOVERY (STREAMLINED ~12s)
         // High-precision consolidated queries hunting genuine organizational RFPs
         // =========================================================================
-        {
-            name: 'Google Open Web RFP Search (Serper)',
-            type: 'GOOGLE_SEARCH_API',
-            enabled: true,
-            queryTemplates: [
-                // 1. Seed Systems, VPC, SPS, Certification & Francophone Opportunities
-                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Appel d\'offres" OR "Manifestation d\'intérêt") ("seed system" OR "semence" OR "seed certification" OR "seed policy" OR "early generation seed" OR "planting material" OR "phytosanitary" OR "tissue culture") (Africa OR Kenya OR Tanzania OR Uganda OR Nigeria OR Ghana OR Ethiopia OR Rwanda OR Senegal OR "Cote d\'Ivoire") after:{DATE_FLOOR} -jobs -vacancy -salary',
-                // 2. AgTech, AI in Extension, Farmer Advisory & Biosafety
-                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR "Call for Proposals" OR "Terms of Reference" OR "Call for Concept Notes") ("agritech" OR "agtech" OR "digital agriculture" OR "farmer advisory" OR "seed advisory" OR "biosafety" OR "GMO" OR "biotechnology regulation" OR "e-extension") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia OR Malawi) after:{DATE_FLOOR} -jobs -vacancy',
-                // 3. High-Value Institutional Donors (Gates, AGRA, USAID, Feed the Future, Mastercard, Rockefeller, GIZ, FCDO, Enabel, SNV)
-                '("Gates Foundation" OR "AGRA" OR "USAID" OR "Feed the Future" OR "Mastercard Foundation" OR "Rockefeller Foundation" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") ("seed systems" OR "agribusiness" OR "agricultural advisory" OR "capacity building" OR "planting materials" OR "adapted crops" OR "VACS" OR "semences") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Call for Concept Notes") Africa after:{DATE_FLOOR} -jobs -vacancy',
-                // 4. Major International Procurement Portals, RECs & CGIAR Centers
-                '(site:sam.gov OR site:reliefweb.int/jobs OR site:developmentaid.org/tenders OR site:developmentaid.org/grants OR "CGIAR" OR "IITA" OR "CIMMYT" OR "ICRISAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "COMESA" OR "ECOWAS") ("seed" OR "semence" OR "crops" OR "agribusiness" OR "variety release" OR "planting materials" OR "agrodealer") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -inurl:search -jobs -vacancy'
-            ]
-        },
         {
             name: 'Social Media Opportunities (LinkedIn, FB, X via Google News RSS)',
             type: 'GOOGLE_NEWS_RSS_SOCIAL',
@@ -643,13 +631,19 @@ const CONFIG = {
             ]
         },
         {
-            name: 'ASARECA Consultancies & EOIs',
-            type: 'ASARECA_REST_API',
-            url: 'https://www.asareca.org/wp-json/wp/v2/posts?categories=90&per_page=20',
-            baseUrl: 'https://www.asareca.org',
+            name: 'Google Open Web RFP Search (Serper)',
+            type: 'GOOGLE_SEARCH_API',
             enabled: true,
-            assumeAfrican: true,
-            preferSerperFallback: false
+            queryTemplates: [
+                // 1. Seed Systems, VPC, SPS, Certification & Francophone Opportunities
+                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Appel d\'offres" OR "Manifestation d\'intérêt") ("seed system" OR "semence" OR "seed certification" OR "seed policy" OR "early generation seed" OR "planting material" OR "phytosanitary" OR "tissue culture") (Africa OR Kenya OR Tanzania OR Uganda OR Nigeria OR Ghana OR Ethiopia OR Rwanda OR Senegal OR "Cote d\'Ivoire") after:{DATE_FLOOR} -jobs -vacancy -salary',
+                // 2. AgTech, AI in Extension, Farmer Advisory & Biosafety
+                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR "Call for Proposals" OR "Terms of Reference" OR "Call for Concept Notes") ("agritech" OR "agtech" OR "digital agriculture" OR "farmer advisory" OR "seed advisory" OR "biosafety" OR "GMO" OR "biotechnology regulation" OR "e-extension") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia OR Malawi) after:{DATE_FLOOR} -jobs -vacancy',
+                // 3. High-Value Institutional Donors (Gates, AGRA, USAID, Feed the Future, Mastercard, Rockefeller, GIZ, FCDO, Enabel, SNV)
+                '("Gates Foundation" OR "AGRA" OR "USAID" OR "Feed the Future" OR "Mastercard Foundation" OR "Rockefeller Foundation" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") ("seed systems" OR "agribusiness" OR "agricultural advisory" OR "capacity building" OR "planting materials" OR "adapted crops" OR "VACS" OR "semences") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Call for Concept Notes") Africa after:{DATE_FLOOR} -jobs -vacancy',
+                // 4. Major International Procurement Portals, RECs & CGIAR Centers
+                '(site:sam.gov OR site:reliefweb.int/jobs OR site:developmentaid.org/tenders OR site:developmentaid.org/grants OR "CGIAR" OR "IITA" OR "CIMMYT" OR "ICRISAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "COMESA" OR "ECOWAS") ("seed" OR "semence" OR "crops" OR "agribusiness" OR "variety release" OR "planting materials" OR "agrodealer") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -inurl:search -jobs -vacancy'
+            ]
         },
 
         // =========================================================================
@@ -1098,16 +1092,16 @@ function runRfpTrackerV4() {
     skippedFeeds.forEach(f => Logger.log(`[SOURCE SKIPPED] ${f.name}: disabled via config.`));
 
     // Discovery Wall-Clock Limit:
-    // Allocate up to 2.5 minutes (150s) for feed ingestion so that time-driven triggers
+    // Allocate up to 3.5 minutes (210s) for feed ingestion so that time-driven triggers
     // (which have a strict 6-minute execution threshold in Apps Script) always leave ample headroom
     // for Gemini AI batch evaluation, spreadsheet updates, and email notifications.
-    const maxDiscoveryMs = 150000; // 2.5 minutes (150 seconds)
+    const maxDiscoveryMs = 210000; // 3.5 minutes (210 seconds)
 
     for (let idx = 0; idx < activeFeeds.length; idx++) {
         const feed = activeFeeds[idx];
         if (Date.now() - runStartTime > maxDiscoveryMs) {
             Logger.log(`[Discovery Guard] Feed ingestion reached ${Math.round((Date.now() - runStartTime) / 1000)}s. Halting discovery early to guarantee safe AI evaluation, sheet write, and email alerts.`);
-            notifyAdminAlert('Discovery Guard Activated (>150s)', `Feed ingestion reached ${Math.round((Date.now() - runStartTime) / 1000)}s before completing all feeds. Halting discovery to guarantee safe AI evaluation, sheet writes, and email notifications.`);
+            notifyAdminAlert('Discovery Guard Activated (>210s)', `Feed ingestion reached ${Math.round((Date.now() - runStartTime) / 1000)}s before completing all feeds. Halting discovery to guarantee safe AI evaluation, sheet writes, and email notifications.`);
             break;
         }
 
@@ -3523,17 +3517,10 @@ function processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTit
 function fetchFundsForNgosNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     const baseUrl = feed.url || 'https://www2.fundsforngos.org/wp-json/wp/v2/posts';
 
-    // 1. Primary fast query: Agriculture Food & Nutrition category (ID: 202832) with lean field projection
-
-    // Executes in ~1.5s (8KB payload vs 750KB full content), avoiding WordPress MySQL search table locks
-
-    const categoryUrl = `${baseUrl}?categories=202832&per_page=35&_fields=id,date,title,link,excerpt`;
+    // Primary fast query: Agriculture Food & Nutrition category (ID: 202832) with lean field projection.
+    // Indexed taxonomy query executes in ~950ms (avoiding WordPress MySQL unindexed search table locks).
+    const categoryUrl = `${baseUrl}?categories=202832&per_page=45&_fields=id,date,title,link,excerpt`;
     processFundsForNgosQuery(categoryUrl, 'Agriculture Category', feed, existingLinks, existingTitleKeys, bucket, feedStats);
-
-    // 2. Focused targeted seed search with lean field projection
-
-    const seedUrl = `${baseUrl}?search=seed&per_page=15&_fields=id,date,title,link,excerpt`;
-    processFundsForNgosQuery(seedUrl, 'seed', feed, existingLinks, existingTitleKeys, bucket, feedStats);
 }
 
 /**
