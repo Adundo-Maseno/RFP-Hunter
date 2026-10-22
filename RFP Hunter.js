@@ -514,7 +514,7 @@ const CONFIG = {
             url: 'https://www2.fundsforngos.org/wp-json/wp/v2/posts',
             enabled: true,
             assumeAfrican: false,
-            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'agtech', 'biosafety', 'seed systems', 'adapted crops', 'climate resilient']
+            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'agtech', 'biosafety', 'seed systems', 'adapted crops', 'climate resilient', 'capacity building']
         },
         {
             name: 'Global South Opportunities Funding',
@@ -532,7 +532,7 @@ const CONFIG = {
             baseUrl: 'https://locatefund.com',
             enabled: true,
             assumeAfrican: true,
-            searchKeywords: ['agriculture', 'seed', 'agribusiness', 'crops', 'farming', 'grant', 'funding', 'call for proposals', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech', 'agrodealer', 'agro-dealer', 'gmo', 'biosafety', 'seed systems', 'adapted crops', 'input distribution', 'semences']
+            searchKeywords: ['agriculture', 'seed', 'agribusiness', 'crops', 'farming', 'grant', 'funding', 'call for proposals', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech', 'agrodealer', 'agro-dealer', 'gmo', 'biosafety', 'seed systems', 'adapted crops', 'input distribution', 'semences', 'capacity building', 'institutional strengthening']
         },
         {
             name: 'SAIGE Africa Opportunity Platform',
@@ -582,7 +582,7 @@ const CONFIG = {
             assumeAfrican: true,
             maxPages: 2,
             perPage: 50,
-            searchTerms: ['seed', 'agribusiness', 'seed systems', 'agriculture', 'semences', 'planting materials']
+            searchTerms: ['seed', 'agribusiness', 'seed systems', 'agriculture', 'semences', 'planting materials', 'capacity building']
         },
         {
             name: 'UNGM Procurement Opportunities',
@@ -590,7 +590,7 @@ const CONFIG = {
             baseUrl: 'https://www.ungm.org',
             url: 'https://www.ungm.org/Public/Notice',
             enabled: true,
-            searchKeywords: ['seed', 'agribusiness', 'crops', 'agtech', 'seed systems', 'planting material', 'semences']
+            searchKeywords: ['seed', 'agribusiness', 'crops', 'agtech', 'seed systems', 'planting material', 'semences', 'capacity building']
         },
         {
             name: 'UNJobNet Consultancies & EOIs',
@@ -599,7 +599,7 @@ const CONFIG = {
             url: 'https://www.unjobnet.org/jobs',
             enabled: true,
             assumeAfrican: false,
-            searchKeywords: ['seed', 'crops', 'agribusiness', 'agtech', 'biosafety', 'seed systems', 'phytosanitary', 'semences']
+            searchKeywords: ['seed', 'crops', 'agribusiness', 'agtech', 'biosafety', 'seed systems', 'phytosanitary', 'semences', 'capacity building']
         },
 
         // =========================================================================
@@ -616,7 +616,7 @@ const CONFIG = {
                 // 2. AgTech, AI in Extension, Farmer Advisory & Biosafety
                 '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR "Call for Proposals" OR "Terms of Reference" OR "Call for Concept Notes") ("agritech" OR "agtech" OR "digital agriculture" OR "farmer advisory" OR "seed advisory" OR "biosafety" OR "GMO" OR "biotechnology regulation" OR "e-extension") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia OR Malawi) after:{DATE_FLOOR} -jobs -vacancy',
                 // 3. High-Value Institutional Donors (Gates, AGRA, USAID, Feed the Future, Mastercard, Rockefeller, GIZ, FCDO, Enabel, SNV)
-                '("Gates Foundation" OR "AGRA" OR "USAID" OR "Feed the Future" OR "Mastercard Foundation" OR "Rockefeller Foundation" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") ("seed systems" OR "agribusiness" OR "agricultural advisory" OR "planting materials" OR "adapted crops" OR "VACS" OR "semences") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Call for Concept Notes") Africa after:{DATE_FLOOR} -jobs -vacancy',
+                '("Gates Foundation" OR "AGRA" OR "USAID" OR "Feed the Future" OR "Mastercard Foundation" OR "Rockefeller Foundation" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") ("seed systems" OR "agribusiness" OR "agricultural advisory" OR "capacity building" OR "planting materials" OR "adapted crops" OR "VACS" OR "semences") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Call for Concept Notes") Africa after:{DATE_FLOOR} -jobs -vacancy',
                 // 4. Major International Procurement Portals, RECs & CGIAR Centers
                 '(site:sam.gov OR site:reliefweb.int/jobs OR site:developmentaid.org/tenders OR site:developmentaid.org/grants OR "CGIAR" OR "IITA" OR "CIMMYT" OR "ICRISAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "COMESA" OR "ECOWAS") ("seed" OR "semence" OR "crops" OR "agribusiness" OR "variety release" OR "planting materials" OR "agrodealer") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -inurl:search -jobs -vacancy'
             ]
@@ -5877,7 +5877,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
 
     // Pre-AI physical goods/equipment supply check: discard pure supply and delivery of equipment or farming input kits
     const isPhysicalEquipmentSupply = /\b(?:supply\s+(?:and|&)\s+delivery\s+of\s+equipment|farming\s+inputs?\s+kits?)\b/i.test(combinedText);
-    if (isPhysicalEquipmentSupply && !/\b(?:advisory|consultanc(?:y|ies)|study|assessment|policy|strategy|evaluation|[eé]tude|strat[eé]gie|politique|conseil)\b/i.test(combinedText)) {
+    if (isPhysicalEquipmentSupply && !/\b(?:advisory|consultanc(?:y|ies)|study|assessment|policy|strategy|evaluation|training|capacity\s+building|formation|renforcement|[eé]tude|strat[eé]gie|politique|conseil)\b/i.test(combinedText)) {
         if (feedStats) { feedStats.lowRelevance++; feedStats.filtered++; feedStats.preAiRejected++; }
 
         return;
@@ -7336,7 +7336,8 @@ const CORE_SEED_KEYWORDS = [
     'biotech seed', 'biotech crops', 'bt cotton', 'bt maize', 'bt cowpea',
     'gene editing', 'genome editing', 'crispr',
     'seed advisory', 'seed advisory services', 'seed advisory platform', 'seed extension', 'seed technology',
-    'seed systems advisory', 'seed digital platform',
+    'seed systems advisory', 'seed digital platform', 'seed capacity building', 'seed company training',
+    'seed sector capacity building', 'breeder training', 'seed inspector training', 'renforcement des capacités semencières',
     // Francophone Seed Terms
     'semence', 'semences', 'système semencier', 'systèmes semenciers', 'secteur semencier', 'filière semencière',
     'semences certifiées', 'certification des semences', 'contrôle de la qualité des semences',
@@ -7399,6 +7400,11 @@ const SECONDARY_AGRI_KEYWORDS = [
     'agricultural extension', 'advisory platform', 'farmer extension', 'advisory solution',
     'smart subsidy', 'e-voucher', 'electronic voucher', 'input subsidy', 'targeted input subsidy',
     'village-based advisor', 'vba', 'digital farmer registry', 'lead farmer',
+    // Agribusiness & Agriculture Capacity Building Keywords
+    'capacity building', 'capacity development', 'institutional strengthening', 'institutional capacity',
+    'training of trainers', 'tot', 'agribusiness training', 'farmer training', 'curriculum development',
+    'skills development', 'cooperative development', 'cooperative capacity building',
+    'renforcement des capacités', 'renforcement institutionnel', 'formation des formateurs', 'organisations paysannes',
     // French agricultural advisory & value chain terms
     'conseil agricole', 'vulgarisation agricole', 'conseillers agricoles', 'services de conseil agricole',
     'intrants agricoles', 'distributeur d intrants', 'filière agricole', 'politique agricole',
