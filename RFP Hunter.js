@@ -553,6 +553,22 @@ const CONFIG = {
         // =========================================================================
         { name: 'AfDB Requests for EOI', url: 'https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/request-for-expression-of-interest', type: 'RENDERED_BLOCK_SCRAPER', baseUrl: 'https://www.afdb.org', enabled: true, assumeAfrican: true },
         {
+            name: 'AfDB Corporate Procurement & Solicitations',
+            url: 'https://www.afdb.org/en/about-us/corporate-procurement/procurement-notices/current-solicitations',
+            type: 'RENDERED_BLOCK_SCRAPER',
+            baseUrl: 'https://www.afdb.org',
+            enabled: true,
+            assumeAfrican: true
+        },
+        {
+            name: 'AfDB Invitations for Bids (IFB)',
+            url: 'https://www.afdb.org/en/documents/project-related-procurement/procurement-notices/invitation-for-bids',
+            type: 'RENDERED_BLOCK_SCRAPER',
+            baseUrl: 'https://www.afdb.org',
+            enabled: true,
+            assumeAfrican: true
+        },
+        {
             name: 'IFAD African Procurement & Calls for Proposals',
             url: 'https://www.ifad.org/en/project-procurement/opportunities',
             callsUrl: 'https://www.ifad.org/en/call-for-proposals',
@@ -565,7 +581,34 @@ const CONFIG = {
             excludeNoticeTypes: ['Contract Award Notice']
         },
         { name: 'EU TED Search API (Agriculture)', type: 'TED_API', enabled: true },
+        {
+            name: 'EU Funding & Tenders Portal (SEDIA Grants)',
+            type: 'EU_SEDIA_API',
+            url: 'https://api.tech.ec.europa.eu/search-api/prod/rest/search?apiKey=SEDIA',
+            baseUrl: 'https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details',
+            enabled: true,
+            assumeAfrican: false,
+            searchTerms: ['agriculture', 'seed systems', 'crops', 'food systems', 'agtech']
+        },
         { name: 'World Bank Procurement API (Global)', type: 'WORLD_BANK', enabled: true },
+        {
+            name: 'World Bank Projects & Operations Pipeline',
+            type: 'WORLD_BANK_PROJECTS',
+            url: 'https://search.worldbank.org/api/v2/projects',
+            baseUrl: 'https://projects.worldbank.org/en/projects-operations/project-detail',
+            enabled: true,
+            assumeAfrican: false,
+            searchTerms: ['seed', 'agriculture', 'agribusiness']
+        },
+        {
+            name: 'Grants.gov US Federal Funding (Simpler Grants)',
+            type: 'GRANTS_GOV_API',
+            url: 'https://apply07.grants.gov/grantsws/rest/opportunities/search/',
+            baseUrl: 'https://simpler.grants.gov',
+            enabled: true,
+            assumeAfrican: false,
+            searchTerms: ['USAID agriculture Africa', 'agribusiness Africa', 'Feed the Future Africa', 'adapted crops Africa', 'food security Africa', 'agriculture Kenya', 'agriculture Tanzania']
+        },
         {
             name: 'Africa-Europe Innovation Platform Funding',
             url: 'https://www.africaeuropeinnovation.net/funding-opportunities/?topic=Food+Systems',
@@ -631,6 +674,36 @@ const CONFIG = {
             ]
         },
         {
+            name: 'Devex Funding & Tender Harvester (via RSS)',
+            type: 'GOOGLE_NEWS_RSS_SOCIAL',
+            enabled: true,
+            assumeAfrican: true,
+            queries: [
+                'site:devex.com ("Request for Proposals" OR "Call for Proposals" OR "tender" OR "grant" OR "Expression of Interest") ("seed" OR "agriculture" OR "agribusiness" OR "crops" OR "food security") Africa when:30d',
+                'site:devex.com/funding ("seed" OR "agriculture" OR "agribusiness" OR "crops" OR "food security") Africa when:30d'
+            ]
+        },
+        {
+            name: 'Candid & Philanthropy News RFP Harvester (via RSS)',
+            type: 'GOOGLE_NEWS_RSS_SOCIAL',
+            enabled: true,
+            assumeAfrican: true,
+            queries: [
+                'site:candid.org ("Request for Proposals" OR "Call for Proposals" OR "RFP" OR "grants")',
+                '("candid.org" OR "Gates Foundation" OR "Rockefeller Foundation" OR "Mastercard Foundation") ("Call for Proposals" OR "Request for Proposals" OR "RFP" OR "Grant Opportunity") ("seed" OR "agriculture" OR "agribusiness" OR "food security") Africa when:60d'
+            ]
+        },
+        {
+            name: 'Gavi Opportunities & CSO Funding Harvester',
+            type: 'GOOGLE_NEWS_RSS_SOCIAL',
+            enabled: true,
+            assumeAfrican: true,
+            queries: [
+                'site:gavi.org ("Request for Proposals" OR "Call for Proposals" OR "Call for Applications" OR "tender" OR "EOI" OR "consultancy" OR "funding") Africa when:30d',
+                'site:ungm.org/Public/Notice "Gavi" when:30d'
+            ]
+        },
+        {
             name: 'Google Open Web RFP Search (Serper)',
             type: 'GOOGLE_SEARCH_API',
             enabled: true,
@@ -642,7 +715,7 @@ const CONFIG = {
                 // 3. High-Value Institutional Donors (Gates, AGRA, USAID, Feed the Future, Mastercard, Rockefeller, GIZ, FCDO, Enabel, SNV)
                 '("Gates Foundation" OR "AGRA" OR "USAID" OR "Feed the Future" OR "Mastercard Foundation" OR "Rockefeller Foundation" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") ("seed systems" OR "agribusiness" OR "agricultural advisory" OR "capacity building" OR "planting materials" OR "adapted crops" OR "VACS" OR "semences") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Call for Concept Notes") Africa after:{DATE_FLOOR} -jobs -vacancy',
                 // 4. Major International Procurement Portals, RECs & CGIAR Centers
-                '(site:sam.gov OR site:reliefweb.int/jobs OR site:developmentaid.org/tenders OR site:developmentaid.org/grants OR "CGIAR" OR "IITA" OR "CIMMYT" OR "ICRISAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "COMESA" OR "ECOWAS") ("seed" OR "semence" OR "crops" OR "agribusiness" OR "variety release" OR "planting materials" OR "agrodealer") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -inurl:search -jobs -vacancy'
+                '(site:sam.gov OR site:simpler.grants.gov OR site:devex.com/funding OR site:candid.org OR site:reliefweb.int/jobs OR site:developmentaid.org/tenders OR site:developmentaid.org/grants OR "CGIAR" OR "IITA" OR "CIMMYT" OR "ICRISAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "COMESA" OR "ECOWAS") ("seed" OR "semence" OR "crops" OR "agribusiness" OR "variety release" OR "planting materials" OR "agrodealer") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -inurl:search -jobs -vacancy'
             ]
         },
 
@@ -1119,6 +1192,12 @@ function runRfpTrackerV4() {
                 fetchGeminiSearchNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats);
             } else if (feed.type === 'WORLD_BANK') {
                 fetchWorldBankNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats);
+            } else if (feed.type === 'WORLD_BANK_PROJECTS') {
+                fetchWorldBankProjects(feed, existingLinks, existingTitleKeys, bucket, feedStats);
+            } else if (feed.type === 'GRANTS_GOV_API') {
+                fetchGrantsGovNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats);
+            } else if (feed.type === 'EU_SEDIA_API') {
+                fetchEuSediaNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats);
             } else if (feed.type === 'TED_API') {
                 fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats);
             } else if (feed.type === 'AGRA_ORACLE_API') {
@@ -2364,6 +2443,239 @@ function fetchWorldBankNotices(feed, existingLinks, existingTitleKeys, bucket, f
                 }
             }
             addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, false, null, null, null, feedStats);
+        });
+        Utilities.sleep(250);
+    });
+}
+
+/**
+ * PARSER 2b: WORLD BANK PROJECTS & OPERATIONS PIPELINE API
+ */
+
+function fetchWorldBankProjects(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
+    const terms = feed.searchTerms || ['seed', 'agriculture', 'agribusiness'];
+    terms.forEach(term => {
+        const url = `https://search.worldbank.org/api/v2/projects?format=json&rows=25&sort=boardapprovaldate%20desc&term=${encodeURIComponent(term)}`;
+        let response;
+        try {
+            response = fetchWithRetry(url, FETCH_OPTIONS);
+        } catch (e) {
+            Logger.log(`[World Bank Projects API] Fetch error for term "${term}": ${e.message}`);
+            return;
+        }
+
+        const code = response.getResponseCode();
+        if (code !== 200) {
+            Logger.log(`[World Bank Projects API] Non-200 response (${code}) for term "${term}". Preview: ${response.getContentText().substring(0, 200)}`);
+            return;
+        }
+
+        let data;
+        try {
+            data = JSON.parse(response.getContentText());
+        } catch (e) {
+            Logger.log(`[World Bank Projects API] Failed to parse JSON response for term "${term}": ${e.message}`);
+            return;
+        }
+
+        const projects = data.projects || {};
+        const list = Array.isArray(projects) ? projects : Object.values(projects);
+        list.forEach(p => {
+            if (!p || !p.id) return;
+            const status = (p.status || '').trim();
+            if (/closed|dropped/i.test(status)) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
+            const title = decodeHtmlEntities(p.project_name || '');
+            if (!title) return;
+            const link = p.url || `https://projects.worldbank.org/en/projects-operations/project-detail/${p.id}`;
+            const countries = Array.isArray(p.countryname) ? p.countryname.join(', ') : (p.countryname || '');
+            const approval = p.boardapprovaldate ? p.boardapprovaldate.substring(0, 10) : '';
+            const closing = p.closingdate ? p.closingdate.substring(0, 10) : '';
+            const description = `${title} [Project ID: ${p.id}] - Country: ${countries} - Status: ${status} - Board Approval: ${approval} - Project Closing: ${closing || 'Ongoing'}`;
+
+            addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, feed.assumeAfrican === true, null, null, null, feedStats);
+        });
+        Utilities.sleep(250);
+    });
+}
+
+/**
+ * PARSER 2c: GRANTS.GOV / SIMPLER GRANTS REST API
+ */
+
+function fetchGrantsGovNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
+    const searchTerms = feed.searchTerms || ['seed systems', 'agribusiness', 'agriculture Africa', 'food security Africa', 'adapted crops'];
+    const url = feed.url || 'https://apply07.grants.gov/grantsws/rest/opportunities/search/';
+    searchTerms.forEach(term => {
+        const payload = JSON.stringify({
+            keyword: term,
+            oppStatuses: 'forecasted|posted',
+            rows: 25
+        });
+        const options = {
+            method: 'POST',
+            contentType: 'application/json',
+            payload: payload,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            muteHttpExceptions: true
+        };
+        let response;
+        try {
+            response = fetchWithRetry(url, options);
+        } catch (e) {
+            Logger.log(`[Grants.gov API] Fetch error for term "${term}": ${e.message}`);
+            return;
+        }
+        const code = response.getResponseCode();
+        if (code !== 200) {
+            Logger.log(`[Grants.gov API] Non-200 response (${code}) for term "${term}". Preview: ${response.getContentText().substring(0, 200)}`);
+            return;
+        }
+        let data;
+        try {
+            data = JSON.parse(response.getContentText());
+        } catch (e) {
+            Logger.log(`[Grants.gov API] Failed to parse JSON response for term "${term}": ${e.message}`);
+            return;
+        }
+        const hits = data.oppHits || [];
+        hits.forEach(notice => {
+            if (!notice) return;
+            const oppId = notice.id || '';
+            const oppNum = notice.number || '';
+            const title = decodeHtmlEntities(notice.title || '');
+            if (!title) return;
+            const link = oppId ? `https://simpler.grants.gov/opportunity/${oppId}` : (oppNum ? `https://www.grants.gov/search-results-detail/${oppId || oppNum}` : '');
+            if (!link) return;
+            const agency = notice.agency || notice.agencyCode || 'US Federal Agency';
+            const openDate = notice.openDate || '';
+            const closeDate = notice.closeDate || '';
+            const status = notice.oppStatus || 'posted';
+            const cfda = Array.isArray(notice.cfdaList) ? ` [CFDA: ${notice.cfdaList.join(', ')}]` : '';
+            const refNo = oppNum ? ` [Ref: ${oppNum}]` : '';
+            const description = `${title}${refNo}${cfda} - Agency: ${agency} - Status: ${status} - Open Date: ${openDate} - Closing Date: ${closeDate}`;
+            let isStaleNotice = false;
+            if (closeDate) {
+                const cDate = parseDateFlexible(closeDate);
+                if (cDate && !isNaN(cDate.getTime()) && cDate.getTime() < Date.now()) {
+                    isStaleNotice = true;
+                }
+            } else if (openDate) {
+                const pDate = parseDateFlexible(openDate);
+                if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear() - 1) {
+                    isStaleNotice = true;
+                }
+            }
+            if (isStaleNotice) {
+                if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
+            addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, feed.assumeAfrican === true, null, null, null, feedStats);
+        });
+        Utilities.sleep(250);
+    });
+}
+
+/**
+ * PARSER 2d: EU FUNDING & TENDERS PORTAL (SEDIA SEARCH API)
+ */
+
+function fetchEuSediaNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
+    const searchTerms = feed.searchTerms || ['agriculture', 'seed systems', 'crops', 'food systems', 'agtech'];
+    searchTerms.forEach(term => {
+        const url = `https://api.tech.ec.europa.eu/search-api/prod/rest/search?apiKey=SEDIA&text=${encodeURIComponent(term)}&pageSize=20&pageNumber=1`;
+        const query = {
+            bool: {
+                must: [
+                    { terms: { type: ['1', '2', '8'] } }, // Grants, Tenders, Calls for proposals
+                    { terms: { status: ['31094501', '31094502'] } } // Open & Forthcoming
+                ]
+            }
+        };
+        const boundary = '----WebKitFormBoundarySEDIA' + Math.floor(Math.random() * 1e9);
+        let body = '';
+        body += '--' + boundary + '\r\n';
+        body += 'Content-Disposition: form-data; name="query"; filename="blob"\r\n';
+        body += 'Content-Type: application/json\r\n\r\n';
+        body += JSON.stringify(query) + '\r\n';
+
+        body += '--' + boundary + '\r\n';
+        body += 'Content-Disposition: form-data; name="languages"; filename="blob"\r\n';
+        body += 'Content-Type: application/json\r\n\r\n';
+        body += JSON.stringify(['en']) + '\r\n';
+
+        body += '--' + boundary + '\r\n';
+        body += 'Content-Disposition: form-data; name="displayFields"; filename="blob"\r\n';
+        body += 'Content-Type: application/json\r\n\r\n';
+        body += JSON.stringify(['type', 'identifier', 'title', 'status', 'startDate', 'deadlineDate', 'frameworkProgramme']) + '\r\n';
+
+        body += '--' + boundary + '--\r\n';
+
+        const options = {
+            method: 'POST',
+            contentType: 'multipart/form-data; boundary=' + boundary,
+            payload: body,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            muteHttpExceptions: true
+        };
+
+        let response;
+        try {
+            response = fetchWithRetry(url, options);
+        } catch (e) {
+            Logger.log(`[EU SEDIA API] Fetch error for term "${term}": ${e.message}`);
+            return;
+        }
+
+        const code = response.getResponseCode();
+        if (code !== 200) {
+            Logger.log(`[EU SEDIA API] Non-200 response (${code}) for term "${term}". Preview: ${response.getContentText().substring(0, 200)}`);
+            return;
+        }
+
+        let data;
+        try {
+            data = JSON.parse(response.getContentText());
+        } catch (e) {
+            Logger.log(`[EU SEDIA API] Failed to parse JSON response for term "${term}": ${e.message}`);
+            return;
+        }
+
+        const results = data.results || [];
+        results.forEach(item => {
+            if (!item || !item.metadata) return;
+            const meta = item.metadata;
+            const identifier = (meta.identifier && meta.identifier[0]) || '';
+            const rawTitle = (meta.title && meta.title[0]) || item.summary || '';
+            const title = decodeHtmlEntities(rawTitle);
+            if (!title) return;
+            const link = identifier
+                ? `https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/opportunities/topic-details/${identifier}`
+                : (item.url || '');
+            if (!link) return;
+
+            const deadline = (meta.deadlineDate && meta.deadlineDate[0]) || '';
+            const startDate = (meta.startDate && meta.startDate[0]) || '';
+            const framework = (meta.frameworkProgramme && meta.frameworkProgramme[0]) || '';
+            const refNo = identifier ? ` [Topic: ${identifier}]` : '';
+            const deadlineText = deadline ? ` - Deadline: ${deadline.substring(0, 10)}` : '';
+            const description = `${title}${refNo} - Programme: ${framework || 'EU Funding & Tenders'}${deadlineText} - Opening Date: ${startDate ? startDate.substring(0, 10) : 'Open'}`;
+
+            if (deadline) {
+                const dDate = parseDateFlexible(deadline);
+                if (dDate && !isNaN(dDate.getTime()) && dDate.getTime() < Date.now()) {
+                    if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                    return;
+                }
+            }
+
+            addCandidateIfNew(feed.name, title, link, description, existingLinks, existingTitleKeys, bucket, feed.assumeAfrican === true, null, null, null, feedStats);
         });
         Utilities.sleep(250);
     });
@@ -3638,7 +3950,7 @@ function fetchGoogleNewsSocialNotices(feed, existingLinks, existingTitleKeys, bu
             const link = linkMatch ? linkMatch[1].trim() : '';
             if (!rawTitle || !link) continue;
 
-            const title = decodeHtmlEntities(rawTitle.replace(/\s+-\s+(?:LinkedIn|Facebook|X|Twitter|DevelopmentAid|UNjobnet|African Development Bank Group|IFAD)$/i, ''));
+            const title = decodeHtmlEntities(rawTitle.replace(/\s+-\s+(?:LinkedIn|Facebook|X|Twitter|DevelopmentAid|UNjobnet|African Development Bank Group|IFAD|Devex|Candid|Philanthropy News Digest|Gavi)$/i, ''));
             const pubDateStr = dateMatch ? dateMatch[1].trim() : '';
             if (pubDateStr && !isOnOrAfterFreshnessFloor(pubDateStr)) {
                 if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
