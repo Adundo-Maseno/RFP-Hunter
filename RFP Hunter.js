@@ -445,10 +445,14 @@ const CONFIG = {
   `,
     WORLD_BANK_SEARCH_TERMS: [
         'seed',
+        'seed systems',
         'agribusiness',
         'crops',
         'planting materials',
-        'biosafety'
+        'biosafety',
+        'agricultural policy',
+        'agricultural extension',
+        'semences'
     ],
     FEEDS: [
         // =========================================================================
@@ -510,7 +514,7 @@ const CONFIG = {
             url: 'https://www2.fundsforngos.org/wp-json/wp/v2/posts',
             enabled: true,
             assumeAfrican: false,
-            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'agtech', 'biosafety']
+            searchKeywords: ['seed', 'agribusiness', 'agriculture', 'crops', 'agtech', 'biosafety', 'seed systems', 'adapted crops', 'climate resilient']
         },
         {
             name: 'Global South Opportunities Funding',
@@ -528,7 +532,7 @@ const CONFIG = {
             baseUrl: 'https://locatefund.com',
             enabled: true,
             assumeAfrican: true,
-            searchKeywords: ['agriculture', 'seed', 'agribusiness', 'crops', 'farming', 'grant', 'funding', 'call for proposals', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech', 'agrodealer', 'agro-dealer', 'gmo', 'biosafety']
+            searchKeywords: ['agriculture', 'seed', 'agribusiness', 'crops', 'farming', 'grant', 'funding', 'call for proposals', 'farmer advisory', 'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech', 'agrodealer', 'agro-dealer', 'gmo', 'biosafety', 'seed systems', 'adapted crops', 'input distribution', 'semences']
         },
         {
             name: 'SAIGE Africa Opportunity Platform',
@@ -578,7 +582,7 @@ const CONFIG = {
             assumeAfrican: true,
             maxPages: 2,
             perPage: 50,
-            searchTerms: ['seed', 'agribusiness', 'seed systems', 'agriculture']
+            searchTerms: ['seed', 'agribusiness', 'seed systems', 'agriculture', 'semences', 'planting materials']
         },
         {
             name: 'UNGM Procurement Opportunities',
@@ -586,7 +590,7 @@ const CONFIG = {
             baseUrl: 'https://www.ungm.org',
             url: 'https://www.ungm.org/Public/Notice',
             enabled: true,
-            searchKeywords: ['seed', 'agribusiness', 'crops', 'agtech']
+            searchKeywords: ['seed', 'agribusiness', 'crops', 'agtech', 'seed systems', 'planting material', 'semences']
         },
         {
             name: 'UNJobNet Consultancies & EOIs',
@@ -595,7 +599,7 @@ const CONFIG = {
             url: 'https://www.unjobnet.org/jobs',
             enabled: true,
             assumeAfrican: false,
-            searchKeywords: ['seed', 'crops', 'agribusiness', 'agtech', 'biosafety']
+            searchKeywords: ['seed', 'crops', 'agribusiness', 'agtech', 'biosafety', 'seed systems', 'phytosanitary', 'semences']
         },
 
         // =========================================================================
@@ -607,14 +611,14 @@ const CONFIG = {
             type: 'GOOGLE_SEARCH_API',
             enabled: true,
             queryTemplates: [
-                // 1. Seed Systems, Certification, Regulations & Advisory
-                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR Consultancy OR Tender OR "Call for Proposals") ("seed system" OR "seed sector" OR "seed certification" OR "seed policy" OR "seed quality" OR "variety release" OR "early generation seed" OR "foundation seed" OR "planting material") (Africa OR Kenya OR Tanzania OR Uganda OR Nigeria OR Ghana OR Ethiopia OR Rwanda) after:{DATE_FLOOR} -jobs -vacancy -salary',
+                // 1. Seed Systems, VPC, SPS, Certification & Francophone Opportunities
+                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Appel d\'offres" OR "Manifestation d\'intérêt") ("seed system" OR "semence" OR "seed certification" OR "seed policy" OR "early generation seed" OR "planting material" OR "phytosanitary" OR "tissue culture") (Africa OR Kenya OR Tanzania OR Uganda OR Nigeria OR Ghana OR Ethiopia OR Rwanda OR Senegal OR "Cote d\'Ivoire") after:{DATE_FLOOR} -jobs -vacancy -salary',
                 // 2. AgTech, AI in Extension, Farmer Advisory & Biosafety
-                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR "Call for Proposals" OR "Terms of Reference") ("agritech" OR "agtech" OR "digital agriculture" OR "farmer advisory" OR "seed advisory" OR "biosafety" OR "GMO" OR "biotechnology regulation") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia) after:{DATE_FLOOR} -jobs -vacancy',
-                // 3. High-Value Institutional Donors (Gates, AGRA, USAID, Feed the Future, GIZ, FCDO, Enabel, SNV)
-                '("Gates Foundation" OR "AGRA" OR "USAID" OR "Feed the Future" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") ("seed systems" OR "agribusiness" OR "agricultural advisory" OR "planting materials" OR "seed sector") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -jobs -vacancy',
-                // 4. Major International Procurement Portals & CGIAR Centers
-                '(site:sam.gov OR site:reliefweb.int/jobs OR site:developmentaid.org/tenders OR site:developmentaid.org/grants OR "CGIAR" OR "IITA" OR "CIMMYT" OR "ICRISAT" OR "AATF" OR "CORAF") ("seed" OR "crops" OR "agribusiness" OR "variety release" OR "planting materials") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -inurl:search -jobs -vacancy'
+                '("RFP" OR "Request for Proposals" OR "Expression of Interest" OR EOI OR "Call for Proposals" OR "Terms of Reference" OR "Call for Concept Notes") ("agritech" OR "agtech" OR "digital agriculture" OR "farmer advisory" OR "seed advisory" OR "biosafety" OR "GMO" OR "biotechnology regulation" OR "e-extension") (Africa OR Kenya OR Rwanda OR Tanzania OR Uganda OR Ghana OR Nigeria OR Ethiopia OR Malawi) after:{DATE_FLOOR} -jobs -vacancy',
+                // 3. High-Value Institutional Donors (Gates, AGRA, USAID, Feed the Future, Mastercard, Rockefeller, GIZ, FCDO, Enabel, SNV)
+                '("Gates Foundation" OR "AGRA" OR "USAID" OR "Feed the Future" OR "Mastercard Foundation" OR "Rockefeller Foundation" OR "GIZ" OR "TradeMark Africa" OR "FCDO" OR "Enabel" OR "SNV") ("seed systems" OR "agribusiness" OR "agricultural advisory" OR "planting materials" OR "adapted crops" OR "VACS" OR "semences") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals" OR "Call for Concept Notes") Africa after:{DATE_FLOOR} -jobs -vacancy',
+                // 4. Major International Procurement Portals, RECs & CGIAR Centers
+                '(site:sam.gov OR site:reliefweb.int/jobs OR site:developmentaid.org/tenders OR site:developmentaid.org/grants OR "CGIAR" OR "IITA" OR "CIMMYT" OR "ICRISAT" OR "AATF" OR "CORAF" OR "ASARECA" OR "COMESA" OR "ECOWAS") ("seed" OR "semence" OR "crops" OR "agribusiness" OR "variety release" OR "planting materials" OR "agrodealer") (RFP OR EOI OR Consultancy OR Tender OR "Call for Proposals") Africa after:{DATE_FLOOR} -inurl:search -jobs -vacancy'
             ]
         },
         {
@@ -623,9 +627,9 @@ const CONFIG = {
             enabled: true,
             assumeAfrican: true,
             queries: [
-                'site:linkedin.com/posts ("Request for Proposals" OR "Call for Proposals" OR "Expression of Interest" OR RFP OR EOI) ("seed" OR "agriculture" OR "agribusiness") Africa when:30d',
-                'site:facebook.com ("Request for Proposals" OR "Call for Proposals" OR "tender") ("seed" OR "agriculture" OR "agribusiness") Africa when:30d',
-                '(site:x.com OR site:twitter.com) ("Request for Proposals" OR "Call for Proposals" OR "tender") ("seed" OR "agriculture" OR "agribusiness") Africa when:30d'
+                'site:linkedin.com/posts ("Request for Proposals" OR "Call for Proposals" OR "Call for Applications" OR "Call for Concept Notes" OR "Expression of Interest" OR RFP OR EOI OR "Appel à propositions") ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "agritech") Africa when:30d',
+                'site:facebook.com ("Request for Proposals" OR "Call for Proposals" OR "Call for Concept Notes" OR "tender" OR "Appel d\'offres") ("seed" OR "semence" OR "agriculture" OR "agribusiness") Africa when:30d',
+                '(site:x.com OR site:twitter.com) ("Request for Proposals" OR "Call for Proposals" OR "Call for Concept Notes" OR "tender") ("seed" OR "semence" OR "agriculture" OR "agribusiness") Africa when:30d'
             ]
         },
         {
@@ -2305,7 +2309,7 @@ function verifyLinkReachable(link) {
 function fetchWorldBankNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     const terms = CONFIG.WORLD_BANK_SEARCH_TERMS || ['agriculture', 'seed'];
     terms.forEach(term => {
-        const url = `https://search.worldbank.org/api/v2/procnotices?format=json&rows=30&apilang=en&sort=noticedate%20desc&term=${encodeURIComponent(term)}`;
+        const url = `https://search.worldbank.org/api/v2/procnotices?format=json&rows=30&sort=noticedate%20desc&term=${encodeURIComponent(term)}`;
         const response = fetchWithRetry(url, FETCH_OPTIONS);
         const code = response.getResponseCode();
         if (code !== 200) {
@@ -2367,7 +2371,7 @@ function fetchWorldBankNotices(feed, existingLinks, existingTitleKeys, bucket, f
 function fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     const url = 'https://api.ted.europa.eu/v3/notices/search';
     const payload = {
-        query: '(FT~"seed" OR FT~"agriculture" OR FT~"crop" OR FT~"agribusiness") AND (FT~"Africa" OR FT~"Sub-Saharan" OR FT~"Kenya" OR FT~"Tanzania" OR FT~"Uganda" OR FT~"Nigeria" OR FT~"Ethiopia" OR FT~"Rwanda" OR FT~"Ghana" OR FT~"Malawi" OR FT~"Zambia" OR FT~"Sahel" OR FT~"ACP") AND PD >= today(-90)',
+        query: '(FT~"seed" OR FT~"semence" OR FT~"semences" OR FT~"agriculture" OR FT~"crop" OR FT~"agribusiness") AND (FT~"Africa" OR FT~"Sub-Saharan" OR FT~"Kenya" OR FT~"Tanzania" OR FT~"Uganda" OR FT~"Nigeria" OR FT~"Ethiopia" OR FT~"Rwanda" OR FT~"Ghana" OR FT~"Malawi" OR FT~"Zambia" OR FT~"Sahel" OR FT~"Senegal" OR FT~"ACP") AND PD >= today(-90)',
         fields: ['ND', 'PD', 'TI', 'CY', 'DS'],
         page: 1,
         limit: 20,
@@ -2426,7 +2430,7 @@ function fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedSta
 function fetchTedSerperFallback(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     Logger.log('[EU TED Search API] Rate-limited (HTTP 429). Free fallback engaged: querying web search providers for active African agricultural tenders on TED.');
     if (!isWebSearchAvailable()) return;
-    const query = 'site:ted.europa.eu ("seed" OR "agriculture" OR "agribusiness" OR "crop" OR "farming") ("Africa" OR "Kenya" OR "Tanzania" OR "Uganda" OR "Ethiopia" OR "Rwanda" OR "Ghana" OR "Nigeria") -jobs -career -vacancy';
+    const query = 'site:ted.europa.eu ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "crop" OR "planting materials") ("Africa" OR "Kenya" OR "Tanzania" OR "Uganda" OR "Ethiopia" OR "Rwanda" OR "Ghana" OR "Nigeria" OR "Sahel" OR "Senegal" OR "Mali" OR "Cote d\'Ivoire") -jobs -career -vacancy';
     const payload = { q: query, num: 10, gl: 'ke', hl: 'en' };
     const res = callSerperWithRotation(payload, 'TED Fallback');
     if (!res || res.getResponseCode() !== 200) return;
@@ -5813,7 +5817,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
     // Social Media Gatekeeper: Discard social posts lacking explicit procurement keywords
     const isSocialSource = /facebook|linkedin|twitter|\bx\.com\b/i.test(sourceName) || /(?:facebook\.com|linkedin\.com|twitter\.com|x\.com)/i.test(link);
     if (isSocialSource) {
-        const hasProcurementSignal = /\b(?:request\s+for\s+proposals?|rfp|expression\s+of\s+interest|eoi|call\s+for\s+proposals?|call\s+for\s+applications?|terms\s+of\s+reference|tor|tender|procurement\s+notice|consultancy\s+services?|grant\s+opportunit(?:y|ies)|concept\s+notes?|market\s+sounding)\b/i.test(combinedText);
+        const hasProcurementSignal = /\b(?:request\s+for\s+proposals?|rfp|expression\s+of\s+interest|eoi|call\s+for\s+proposals?|call\s+for\s+applications?|call\s+for\s+concept\s+notes?|rfcn|cfcn|terms\s+of\s+reference|tor|tender|procurement\s+notice|consultancy\s+services?|grant\s+opportunit(?:y|ies)|concept\s+notes?|market\s+sounding|appel\s+[aà]\s+propositions?|appel\s+d['’]offres?|manifestation\s+d['’]int[eé]r[eê]t|asmi\b)\b/i.test(combinedText);
         if (!hasProcurementSignal) {
             if (feedStats) { feedStats.boilerplate++; feedStats.filtered++; feedStats.preAiRejected++; }
             return;
@@ -5863,7 +5867,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
 
     const NON_AGRI_CIVIL_WORKS_REGEX = /\b(?:prasa\b|traction substation|substations?|ohte equipment|airfield|airports?|aérodrome|ground lighting|motor spares|water pipes|air conditioning|reconstruction des infrastructures|réhabilitation logement|smart classroom|appareils numériques|biometric registration kit|id cards and printing|wellness essentials|curved display platform|ageroute\b|asphalt|bitumen|road rehabilitation|travaux de bitumage|travaux\s+routiers?|axe\s+routier|route\s+rev[eê]tue|fourniture de bureau|véhicules 4x4|fourniture de carburant|stations? météo|logement d'astreinte|bâtiments administratifs|nettoyage des locaux|gardiennage|guarding\s+services?|security\s+guards?|armed\s+guards?|security\s+services?|physical\s+security|supply\s+(?:and\s+delivery\s+)?of\s+(?:urea|bulk|npk|chemical)\s+fertilizer|fertilizer\s+delivery|automated.*processing\s+equipment|processing\s+equipment|milling\s+equipment|oil\s+processing\s+equipment|heavy\s+machinery|plant\s+machinery|industrial\s+equipment|drilling\s+(?:and\s+equipping\s+)?of\s+boreholes?|equipping\s+of\s+boreholes?|water\s+trucking|borehole\s+drilling|pre[-_\s]?seed\b|angel\s+invest(?:ment|or)|venture\s+capital|equity\s+fund(?:ing)?|series\s+[a-c]\s+funding|incubator\s+cohort|ploughs?|donkey drawn|tractors?\s+with\s+implements|market\s+stalls?|market\s+shed|livestock\s+market|factory\s+extension|travaux\s+de\s+construction|construction\s+of\s+new\s+office|building\s+construction|construction\s+of\s+irrigation\s+canals|spillway|embankment\s+dam|dam\s+instrumentation|périmètre\s+irrigué|prisons?\b|national\s+backbone|cross\s+border\s+links|plans?\s+d'actions?\s+de\s+réinstallation|resettlement\s+action\s+plan|supply\s*&\s*deliver\s+fresh\s+fruits|supply\s*&\s*deliver\s+live\s+(?:chickens|poultry|sheep|goats|livestock)|supply\s*&\s*deliver\s+building\s+hardware|fodder\s+chopper|crop\s+residue\s+crusher|lng\s+terminal|liquefied\s+natural\s+gas|crude\s+oil|petroleum|oil\s+refinery|diesel\s+generator|generator\s+set|maths|mathematics|secondary\s+school\s+curriculum|curriculum\s+\(rsmc\)|provision\s+of\s+printing|printing\s+and\s+binding|medical\s+supply|hospital\s+supplies|clinical\s+supplies|pharmaceuticals?|mineral\s+value\s+chain|mineral\s+economist|chevening\s+master(?:'|’)?s\s+scholarships?|inclusive\s+cities|smart\s+cities\s+charter|urban\s+transport|housing\s+and\s+urban|cybercriminalité|cybersecurity|cyber-security|cyber\s+security|réalité\s+augmentée|augmented\s+reality|virtual\s+reality|réalité\s+virtuelle|software\s+development|développement\s+logiciel|data\s+centre|data\s+center|réseau\s+informatique|csu\s+equipment|equipamento\s+necessario\s+para\s+o\s+csu|computer\s+lab|fibre\s+optic|cloud\s+computing|data\s+science\s+curriculum|dell|lenovo|hp\s+laptops?|tablets?\s+and\s+laptops?|laptops?\s+and\s+tablets?|ssl\s+certificates?|procurement\s+of\s+servers?|server\s+hardware|network\s+switches|photocopiers?|toner\s+cartridges?|office\s+stationery|office\s+furniture|headphones|external drive|double-door refrigerator|refrigerators?|standing tables?|monitor cables?|provision of legal services|violences?\s+basées?\s+sur\s+le\s+genre|gender[-_\s]+based\s+violence|\bvbg\b|\bgbv\b|travel\s+audit|credit\s+life\s+policy|insurance\s+premiums|claims\s+administration|équipements?\s+de\s+p[eê]che|matériel\s+de\s+p[eê]che|outils\s+et\s+d\'équipements?\s+de\s+p[eê]che|marine\s+fisheries|marine\s+fishing|deep[-_\s]sea\s+fisheries|breeding\s+(?:sheep|goats|cattle|pigs|chickens|poultry)|petits\s+ruminants|poussins|alevins|aliments?\s+bétail|midi\s*bus(?:es)?|bus\s+spare\s+parts|spare\s+parts|polyten[e]?\s+tubes?|polythene\s+tubes?|polyethylene\s+tubes?|surplus\s+it\s+assets|written[-_\s]off\s+computer)\b/i;
     if (NON_AGRI_CIVIL_WORKS_REGEX.test(combinedText)) {
-        const hasSeedOrCrop = CORE_SEED_KEYWORDS.some(k => new RegExp('(?:^|[^a-zA-Z0-9_])' + escapeRegex(k) + '(?:$|[^a-zA-Z0-9_])', 'i').test(combinedText)) || /\b(seed|variety|breeder|germplasm|crop|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|gmo|biosafety|biotech|transgenic|agtech|agritech|agri[-\s]?tech)s?\b/i.test(combinedText);
+        const hasSeedOrCrop = CORE_SEED_KEYWORDS.some(k => new RegExp('(?:^|[^a-zA-Z0-9_])' + escapeRegex(k) + '(?:$|[^a-zA-Z0-9_])', 'i').test(combinedText)) || /\b(seed|semence|semences|variety|vari[eé]t[eé]|breeder|s[eé]lectionneur|germplasm|ressources\s+phytog[eé]n[eé]tiques|crop|culture|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|gmo|ogm|biosafety|bios[eé]curit[eé]|biotech|biotechnologie|transgenic|transg[eé]nique|agtech|agritech|agri[-\s]?tech)s?\b/i.test(combinedText);
         if (!hasSeedOrCrop) {
             if (feedStats) { feedStats.lowRelevance++; feedStats.filtered++; feedStats.preAiRejected++; }
 
@@ -5873,7 +5877,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
 
     // Pre-AI physical goods/equipment supply check: discard pure supply and delivery of equipment or farming input kits
     const isPhysicalEquipmentSupply = /\b(?:supply\s+(?:and|&)\s+delivery\s+of\s+equipment|farming\s+inputs?\s+kits?)\b/i.test(combinedText);
-    if (isPhysicalEquipmentSupply && !/\b(?:advisory|consultanc(?:y|ies)|study|assessment|policy|strategy|evaluation)\b/i.test(combinedText)) {
+    if (isPhysicalEquipmentSupply && !/\b(?:advisory|consultanc(?:y|ies)|study|assessment|policy|strategy|evaluation|[eé]tude|strat[eé]gie|politique|conseil)\b/i.test(combinedText)) {
         if (feedStats) { feedStats.lowRelevance++; feedStats.filtered++; feedStats.preAiRejected++; }
 
         return;
@@ -7289,15 +7293,17 @@ const CORE_SEED_KEYWORDS = [
     'seed', 'seed system', 'seed sector', 'seed policy', 'seed regulation', 'seed law',
     'seed certification', 'e-certification', 'certified seed', 'quality declared seed', 'qds',
     'standard certified seed', 'standard seed', 'standard seed class', 'orphan crops', 'clean planting material',
-    'vegetatively propagated', 'vpm', 'seed quality', 'seed quality assurance', 'seed testing',
-    'seed testing laboratory', 'seed testing lab', 'seed inspection', 'field inspection', 'seed sampling',
-    'seed analysis', 'seed traceability', 'private seed inspector', 'authorized seed inspector',
-    'seed inspector authorization', 'germination', 'moisture content', 'purity analysis', 'ista',
-    'oecd labels', 'scratch-off', 'scratch-off labels', 'mulika mbegu mbovu', 'm3', 'ripoti mbegu isiyo bora',
-    'rimi', 'mbeguchoice', 'variety identification number', 'vin', 'the african seed access index', 'tasai',
-    'esseta', 'npt', 'dus', 'variety release', 'variety registration', 'variety catalogue',
-    'crop release', 'plant variety protection', 'pvp', 'upov', 'plant breeding', 'crop variety', 'crop varieties',
-    'germplasm', 'foundation seed', 'breeder seed', 'parent seed', 'basic seed',
+    'clean planting materials', 'vegetatively propagated', 'vegetatively propagated crops', 'vpm', 'vpc',
+    'seed quality', 'seed quality assurance', 'seed testing', 'seed testing laboratory', 'seed testing lab',
+    'seed inspection', 'field inspection', 'seed sampling', 'seed analysis', 'seed traceability',
+    'private seed inspector', 'authorized seed inspector', 'authorized private inspectors', 'seed inspector authorization',
+    'germination', 'moisture content', 'purity analysis', 'ista', 'oecd labels', 'oecd seed schemes',
+    'scratch-off', 'scratch-off labels', 'mulika mbegu mbovu', 'm3', 'ripoti mbegu isiyo bora', 'rimi',
+    'mbeguchoice', 'variety identification number', 'vin', 'the african seed access index', 'tasai',
+    'seedsat', 'seed roadmap', 'national seed roadmap', 'seed road map', 'esseta', 'npt', 'dus',
+    'variety release', 'variety registration', 'variety catalogue', 'crop release',
+    'plant variety protection', 'pvp', 'plant breeders rights', 'pbr', 'upov', 'plant breeding',
+    'crop variety', 'crop varieties', 'germplasm', 'foundation seed', 'breeder seed', 'parent seed', 'basic seed',
     'early generation seed', 'egs', 'seed multiplication', 'seed value chain', 'seed trade',
     'seed company', 'seed companies', 'seed enterprise', 'seed enterprises', 'seed business',
     'seed enterprise development', 'seed production', 'seed distribution', 'seed access', 'smallholder seed',
@@ -7305,18 +7311,22 @@ const CORE_SEED_KEYWORDS = [
     'seed processing', 'seed processing plant', 'seed conditioning', 'seed packaging', 'seed storage',
     'seed sieves', 'seed drying', 'seed grading', 'seed demand forecasting', 'seed demand forecast',
     'seed demand', 'sdf', 'effective demand', 'variety positioning', 'seed marketing', 'seed sales',
-    'seed investment plan', 'seedsat', 'counterfeit seed', 'fake seed', 'seed verification',
+    'seed investment plan', 'counterfeit seed', 'fake seed', 'seed verification',
     'seed border control', 'seed surveillance', 'seed subsidy', 'agrodealer', 'agro-dealer',
     'agro dealer', 'agrodealers', 'agro-dealers', 'agro dealers', 'agrodealer mapping', 'agrodealer association',
     'agrodealer network', 'agro-dealer network', 'agrodealer training', 'agro-dealer training',
     'agrodealer development', 'agro-dealer development', 'agro-delear', 'agrodelear', 'agro delear',
-    'seed trade association',
-    'stak', 'tasta', 'afsta', 'the african seed company toolbox', 'seed company toolbox',
-    'drought tolerant', 'planting material', 'planting materials', 'phytosanitary', 'seedlings',
-    'horticulture nurseries', 'seedling nurseries', 'horticulture seedlings', 'fodder planting materials',
-    'pasture planting materials', 'seed storage', 'seed treatment', 'hybrid seed',
+    'seed trade association', 'stak', 'tasta', 'afsta', 'the african seed company toolbox', 'seed company toolbox',
+    'drought tolerant', 'drought-tolerant seed', 'climate-resilient seed', 'climate resilient seed',
+    'vision for adapted crops and soils', 'vacs', 'adapted crops', 'opportunity crops',
+    'neglected and underutilized species', 'nus', 'traditional food crops',
+    'planting material', 'planting materials', 'phytosanitary', 'sanitary and phytosanitary', 'sps compliance',
+    'pest risk analysis', 'seedlings', 'horticulture nurseries', 'seedling nurseries',
+    'apical rooted cuttings', 'arc', 'seed potato', 'seed potato multiplication', 'potato seed tubers',
+    'cassava stem cuttings', 'cassava seed system', 'sweetpotato vine multiplication', 'sweet potato vines',
+    'fodder planting materials', 'pasture planting materials', 'seed treatment', 'hybrid seed',
     'open pollinated variety', 'opv', 'isolation distance', 'rogueing', 'roguing',
-    'seed crop agronomy', 'tissue culture',
+    'seed crop agronomy', 'tissue culture', 'tissue culture plantlets', 'aeroponics', 'screenhouse seed',
     'gmo', 'gmos', 'gmo seed', 'gmo seeds', 'gmo crops', 'gmo variety',
     'genetically modified', 'genetically modified organism', 'genetically modified organisms',
     'genetically modified crop', 'genetically modified crops', 'genetically modified seed', 'genetically modified seeds',
@@ -7325,7 +7335,15 @@ const CORE_SEED_KEYWORDS = [
     'national biosafety authority', 'national biosafety', 'agricultural biotechnology', 'biotechnology regulation',
     'biotech seed', 'biotech crops', 'bt cotton', 'bt maize', 'bt cowpea',
     'gene editing', 'genome editing', 'crispr',
-    'seed advisory', 'seed advisory services', 'seed advisory platform', 'seed extension', 'seed technology', 'seed systems advisory', 'seed digital platform'
+    'seed advisory', 'seed advisory services', 'seed advisory platform', 'seed extension', 'seed technology',
+    'seed systems advisory', 'seed digital platform',
+    // Francophone Seed Terms
+    'semence', 'semences', 'système semencier', 'systèmes semenciers', 'secteur semencier', 'filière semencière',
+    'semences certifiées', 'certification des semences', 'contrôle de la qualité des semences',
+    'multiplication des semences', 'multiplication semencière', 'production semencière',
+    'entreprise semencière', 'entreprises semencières', 'variétés améliorées',
+    'homologation variétale', 'homologation des variétés', 'catalogue variétal',
+    'banque de semences', 'banque communautaire de semences', 'grainothèque'
 ];
 const TRACK_RECORD_COUNTRIES = [
     'burkina faso', 'burundi', 'democratic republic of congo', 'drc',
@@ -7348,7 +7366,9 @@ const KNOWN_PARTNER_KEYWORDS = [
     'gatsby', 'gatsby africa', 'mpedigree', 'world bank', 'ifad', 'afdb', 'fao', 'cimmyt',
     'ilri', 'iita', 'cgiar', 'aatf', 'asareca', 'coraf', 'fara', 'kalro', 'kephis', 'tosci',
     'scci', 'agricultural seed agency', 'asa', 'stak', 'seedan', 'tasta', 'usta', 'afsta',
-    'semis', 'wacci', 'giz', 'eu', 'european union', 'wfp', 'undp', 'cta', 'trademark africa', 'trademark east africa', 'tma', 'enabel', 'snv'
+    'semis', 'wacci', 'giz', 'eu', 'european union', 'wfp', 'undp', 'cta', 'trademark africa',
+    'trademark east africa', 'tma', 'enabel', 'snv', 'mastercard foundation', 'rockefeller foundation',
+    'rvo', 'jica', 'ciat', 'cip', 'africarice', 'icraf', 'technoserve', 'palladium', 'chemonics', 'tetra tech'
 ];
 const SECONDARY_AGRI_KEYWORDS = [
     'agriculture', 'agribusiness', 'youth agribusiness', 'women in agribusiness', 'agribusiness incubation',
@@ -7375,13 +7395,18 @@ const SECONDARY_AGRI_KEYWORDS = [
     'supply chain visibility', 'market intelligence', 'customs digitisation', 'customs digitization',
     'trade facilitation', 'trade logistics', 'market sounding', 'request for information', 'digital tools',
     'agricultural advisory', 'farmer advisory', 'farmer advisory services', 'farmer advisory platform',
-    'seed advisory', 'agtech', 'agritech', 'agri-tech', 'agri tech', 'digital extension', 'e-extension', 'digital advisory',
+    'seed advisory', 'digital extension', 'e-extension', 'digital advisory',
     'agricultural extension', 'advisory platform', 'farmer extension', 'advisory solution',
-    'maize', 'sunflower', 'rice', 'wheat', 'sorghum', 'millet', 'cassava', 'cowpea', 'soya',
-    'soybean', 'legumes', 'grain', 'cereals', 'avocado', 'banana', 'mango', 'pineapple',
-    'pineapples', 'passion fruit', 'sweet potato', 'sweet potatoes', 'african leafy vegetables',
-    'vegetables', 'cashew', 'coffee', 'cocoa', 'tea', 'sugarcane', 'sugar cane', 'palm',
-    'pawpaw', 'apple', 'grape', 'pasture', 'fodder'
+    'smart subsidy', 'e-voucher', 'electronic voucher', 'input subsidy', 'targeted input subsidy',
+    'village-based advisor', 'vba', 'digital farmer registry', 'lead farmer',
+    // French agricultural advisory & value chain terms
+    'conseil agricole', 'vulgarisation agricole', 'conseillers agricoles', 'services de conseil agricole',
+    'intrants agricoles', 'distributeur d intrants', 'filière agricole', 'politique agricole',
+    'maize', 'sunflower', 'rice', 'wheat', 'sorghum', 'millet', 'cassava', 'cowpea', 'pigeon pea',
+    'green gram', 'soya', 'soybean', 'groundnut', 'sesame', 'legumes', 'grain', 'cereals', 'avocado',
+    'banana', 'mango', 'pineapple', 'pineapples', 'passion fruit', 'sweet potato', 'sweet potatoes',
+    'orange-fleshed sweet potato', 'ofsp', 'african leafy vegetables', 'vegetables', 'cashew', 'coffee',
+    'cocoa', 'tea', 'sugarcane', 'sugar cane', 'palm', 'pawpaw', 'apple', 'grape', 'pasture', 'fodder'
 ];
 function isAgriRelated(text) {
     return getAgriMatchScore(text) > 0;
@@ -7415,9 +7440,9 @@ function getAgriMatchScore(text) {
     const countryHits = countDistinctKeywordHits(lower, TRACK_RECORD_TARGETS);
     const partnerHits = countDistinctKeywordHits(lower, KNOWN_PARTNER_KEYWORDS);
     const secondaryHits = countDistinctKeywordHits(lower, SECONDARY_AGRI_KEYWORDS);
-    const procurementSignal = /\b(rfp|rfq|eoi|expression of interest|request for proposals?|request for quotations?|tender|call for proposals?|call for concept notes?|consultancy|procurement notice|rfcn)\b/i.test(lower);
-    const isAgriInstitution = /\b(?:agra|alliance for a green revolution in africa|cimmyt|ilri|aatf|asareca|cgiar|fao|ifad)\b/i.test(lower);
-    const agricultureSignal = coreHits > 0 || secondaryHits > 0 || /\b(seed|agriculture|agribusiness|agrifood|agri-food|food\s+systems?|crop|farmer|farm|farms|farming|smallholder|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|planting material|agtech|agritech|agri[-\s]?tech|advisory|agri[-\s]?enterprise|policy\s+advocacy|block\s+farm|producteurs?|riz|gmo|gmos|biosafety|biotech|transgenic|genetically\s+modified)\b/i.test(lower) || (isAgriInstitution && procurementSignal);
+    const procurementSignal = /\b(rfp|rfq|eoi|expression of interest|request for proposals?|request for quotations?|tender|call for proposals?|call for concept notes?|consultancy|procurement notice|rfcn|cfcn|call for applications?|terms of reference|tor|appel\s+[aà]\s+propositions?|appel\s+d['’]offres?|manifestation\s+d['’]int[eé]r[eê]t|avis\s+de\s+sollicitation|ami\b|asmi\b)\b/i.test(lower);
+    const isAgriInstitution = /\b(?:agra|alliance for a green revolution in africa|cimmyt|ilri|aatf|asareca|coraf|cgiar|fao|ifad)\b/i.test(lower);
+    const agricultureSignal = coreHits > 0 || secondaryHits > 0 || /\b(seed|seeds|semence|semences|agriculture|agribusiness|agrifood|agri-food|food\s+systems?|crop|crops|farmer|farmers|farm|farms|farming|smallholder|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|planting materials?|mat[eé]riel\s+v[eé]g[eé]tal|agtech|agritech|agri[-\s]?tech|advisory|conseil\s+agricole|vulgarisation|agri[-\s]?enterprise|policy\s+advocacy|block\s+farm|producteurs?|riz|vacs|adapted\s+crops?|orphan\s+crops?|gmo|gmos|biosafety|bios[eé]curit[eé]|biotech|transgenic|genetically\s+modified|intrants?\s+agricoles?)\b/i.test(lower) || (isAgriInstitution && procurementSignal);
 
     // An opportunity with zero seed keywords, zero secondary agri keywords, and no agricultural signal
 
