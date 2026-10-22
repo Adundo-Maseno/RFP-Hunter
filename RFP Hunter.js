@@ -4604,7 +4604,7 @@ function auditTrackedOpportunitiesStatus(sheet) {
             }
 
             // 2. Compute dynamic lifecycle status
-            if (closing && closing !== 'Not Specified' && !String(closing).toLowerCase().includes('ongoing')) {
+            if (closing && String(closing).trim() !== 'Not Specified' && !String(closing).toLowerCase().includes('ongoing')) {
                 const parsedDate = parseDateFlexible(closing);
                 if (parsedDate && !isNaN(parsedDate.getTime())) {
                     const deadline = new Date(parsedDate);
@@ -6180,7 +6180,12 @@ function heuristicClosingCheck(description) {
 
 function parseDateFlexible(rawDate) {
     if (!rawDate) return null;
-    const cleaned = rawDate.replace(/(?:st|nd|rd|th)/gi, '').trim();
+    if (rawDate instanceof Date) {
+        return isNaN(rawDate.getTime()) ? null : rawDate;
+    }
+    const str = String(rawDate).trim();
+    if (!str) return null;
+    const cleaned = str.replace(/(?:st|nd|rd|th)/gi, '').trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return new Date(`${cleaned}T23:59:59`);
 
     // Format: DD-Mon-YYYY or DD Month YYYY (e.g., 17-Jul-2026 or 17 July 2026)
