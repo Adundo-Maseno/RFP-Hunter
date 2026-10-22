@@ -3386,11 +3386,37 @@ function fetchCimmytSerperFallback(feed, existingLinks, existingTitleKeys, bucke
 function fetchUnjobnetNotices(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     const baseUrl = feed.baseUrl || 'https://www.unjobnet.org';
     const keywords = feed.searchKeywords || ['seed', 'crops', 'germplasm', 'agronomy'];
-    keywords.forEach(kw => {
+    let directSuccessful = false;
+    for (let i = 0; i < keywords.length; i++) {
+        const kw = keywords[i];
         const url = `${baseUrl}/jobs?keywords=${encodeURIComponent(kw)}`;
-        processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTitleKeys, bucket, feedStats);
-        Utilities.sleep(250);
-    });
+        const ok = processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTitleKeys, bucket, feedStats);
+        if (ok) {
+            directSuccessful = true;
+            Utilities.sleep(250);
+        } else {
+            Logger.log(`[UNJobNet Scraper] Direct query failed or host unreachable for "${kw}". Stopping direct attempts to preserve discovery budget.`);
+            break;
+        }
+    }
+
+    // Circuit breaker fallback: If direct portal queries fail or host is unreachable, engage Google News RSS syndication
+    if (!directSuccessful) {
+        queryUnjobnetRssFallback(feed, existingLinks, existingTitleKeys, bucket, feedStats);
+    }
+}
+
+function queryUnjobnetRssFallback(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
+    Logger.log('[UNJobNet Scraper] Engaging high-speed Google News RSS syndication fallback.');
+    const rssFeed = {
+        name: feed.name,
+        type: 'GOOGLE_NEWS_RSS_SOCIAL',
+        queries: [
+            'site:unjobnet.org ("seed" OR "crops" OR "agriculture" OR "agribusiness" OR "consultant") Africa when:30d',
+            'site:unjobnet.org ("Request for Proposals" OR "Call for Proposals" OR "EOI" OR "Tender") Africa when:30d'
+        ]
+    };
+    fetchGoogleNewsSocialNotices(rssFeed, existingLinks, existingTitleKeys, bucket, feedStats);
 }
 
 function processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTitleKeys, bucket, feedStats) {
@@ -3401,14 +3427,14 @@ function processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTit
     } catch (e) {
         Logger.log(`[UNJobNet Scraper] Request failed for ${url}: ${e.message}`);
 
-        return;
+        return false;
     }
 
     const code = response.getResponseCode();
     if (code !== 200) {
         Logger.log(`[UNJobNet Scraper] Non-200 response (${code}) fetching ${url}`);
 
-        return;
+        return false;
     }
 
     const html = response.getContentText();
@@ -3416,7 +3442,7 @@ function processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTit
     if (!match) {
         Logger.log(`[UNJobNet Scraper] No jobs JSON found in page for query: ${kw}`);
 
-        return;
+        return false;
     }
 
     let jobs;
@@ -3426,10 +3452,10 @@ function processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTit
     } catch (e) {
         Logger.log(`[UNJobNet Scraper] Failed to parse jobs JSON for ${kw}: ${e.message}`);
 
-        return;
+        return false;
     }
 
-    if (!Array.isArray(jobs) || !jobs.length) return;
+    if (!Array.isArray(jobs) || !jobs.length) return true;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     jobs.forEach(job => {
@@ -3484,6 +3510,7 @@ function processUnjobnetQuery(url, kw, feed, baseUrl, existingLinks, existingTit
             feedStats
         );
     });
+    return true;
 }
 
 /**
@@ -3623,7 +3650,7 @@ function fetchGoogleNewsSocialNotices(feed, existingLinks, existingTitleKeys, bu
             const link = linkMatch ? linkMatch[1].trim() : '';
             if (!rawTitle || !link) continue;
 
-            const title = decodeHtmlEntities(rawTitle.replace(/\s+-\s+(?:LinkedIn|Facebook|X|Twitter|DevelopmentAid)$/i, ''));
+            const title = decodeHtmlEntities(rawTitle.replace(/\s+-\s+(?:LinkedIn|Facebook|X|Twitter|DevelopmentAid|UNjobnet|African Development Bank Group|IFAD)$/i, ''));
             const pubDateStr = dateMatch ? dateMatch[1].trim() : '';
             if (pubDateStr && !isOnOrAfterFreshnessFloor(pubDateStr)) {
                 if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
@@ -3848,7 +3875,8 @@ function processFundsForNgosQuery(url, kw, feed, existingLinks, existingTitleKey
 
 function queryPortalSerperFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     if (!isWebSearchAvailable()) {
-        Logger.log(`[${feed.name}] Web search fallback skipped: No active search provider API keys available.`);
+        Logger.log(`[${feed.name}] Web search fallback skipped: No active search provider API keys available. Engaging Google News RSS fallback.`);
+        queryPortalRssFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats);
         return;
     }
 
@@ -3920,11 +3948,26 @@ function queryPortalSerperFallback(siteDomain, queryTerms, feed, existingLinks, 
             });
         } else {
             const errSnippet = (response && response.getContentText) ? response.getContentText().substring(0, 150) : "";
-            Logger.log(`[${feed.name}] Serper fallback returned HTTP ${(response && response.getResponseCode) ? response.getResponseCode() : 'unknown'}${errSnippet ? ": " + errSnippet : ""}`);
+            Logger.log(`[${feed.name}] Serper fallback returned HTTP ${(response && response.getResponseCode) ? response.getResponseCode() : 'unknown'}${errSnippet ? ": " + errSnippet : ""}. Engaging Google News RSS fallback.`);
+            queryPortalRssFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats);
         }
     } catch (e) {
-        Logger.log(`[${feed.name}] Serper fallback error: ${e.message}`);
+        Logger.log(`[${feed.name}] Serper fallback error: ${e.message}. Engaging Google News RSS fallback.`);
+        queryPortalRssFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats);
     }
+}
+
+function queryPortalRssFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats) {
+    const termsList = Array.isArray(queryTerms) ? queryTerms.slice(0, 4) : [queryTerms];
+    const termsStr = termsList.map(t => (t.includes(' ') && !t.startsWith('"')) ? `"${t}"` : t).join(' OR ');
+    const rssQuery = `site:${siteDomain} (${termsStr}) Africa when:60d`;
+    Logger.log(`[${feed.name}] Free Google News RSS fallback engaged for ${siteDomain}: "${rssQuery}"`);
+    const rssFeed = {
+        name: feed.name,
+        type: 'GOOGLE_NEWS_RSS_SOCIAL',
+        queries: [rssQuery]
+    };
+    fetchGoogleNewsSocialNotices(rssFeed, existingLinks, existingTitleKeys, bucket, feedStats);
 }
 
 /**
