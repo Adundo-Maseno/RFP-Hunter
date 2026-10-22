@@ -633,6 +633,16 @@ const CONFIG = {
             ]
         },
         {
+            name: 'DevelopmentAid Opportunities & Grants (via RSS)',
+            type: 'GOOGLE_NEWS_RSS_SOCIAL',
+            enabled: true,
+            assumeAfrican: true,
+            queries: [
+                'site:developmentaid.org/tenders ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "crops" OR "planting materials") Africa when:30d',
+                'site:developmentaid.org/grants ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "grant" OR "crops") Africa when:30d'
+            ]
+        },
+        {
             name: 'ASARECA Consultancies & EOIs',
             type: 'ASARECA_REST_API',
             url: 'https://www.asareca.org/wp-json/wp/v2/posts?categories=90&per_page=20',
@@ -3601,7 +3611,7 @@ function fetchGoogleNewsSocialNotices(feed, existingLinks, existingTitleKeys, bu
         const itemRegex = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
         let itemMatch;
         let count = 0;
-        while ((itemMatch = itemRegex.exec(xml)) !== null && count < 15) {
+        while ((itemMatch = itemRegex.exec(xml)) !== null && count < 25) {
             const itemXml = itemMatch[1];
             const titleMatch = itemXml.match(/<title\b[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
             const linkMatch = itemXml.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i);
@@ -3613,7 +3623,7 @@ function fetchGoogleNewsSocialNotices(feed, existingLinks, existingTitleKeys, bu
             const link = linkMatch ? linkMatch[1].trim() : '';
             if (!rawTitle || !link) continue;
 
-            const title = decodeHtmlEntities(rawTitle.replace(/\s+-\s+(?:LinkedIn|Facebook|X|Twitter)$/i, ''));
+            const title = decodeHtmlEntities(rawTitle.replace(/\s+-\s+(?:LinkedIn|Facebook|X|Twitter|DevelopmentAid)$/i, ''));
             const pubDateStr = dateMatch ? dateMatch[1].trim() : '';
             if (pubDateStr && !isOnOrAfterFreshnessFloor(pubDateStr)) {
                 if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
