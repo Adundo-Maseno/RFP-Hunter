@@ -4625,6 +4625,10 @@ function scrapePortalBlockLevel(feed, existingLinks, existingTitleKeys, bucket, 
 
 function auditTrackedOpportunitiesStatus(sheet) {
     try {
+        if (!sheet || typeof sheet.getLastRow !== 'function') {
+            sheet = getOrCreateSheet();
+        }
+        if (!sheet) return;
         const lastRow = sheet.getLastRow();
         if (lastRow < 2) return;
         const totalCols = Math.max(sheet.getLastColumn(), 12);
@@ -6928,21 +6932,33 @@ function notifyAdminAlert(subject, body) {
 
         let ss = null;
         try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { }
-        const recipients = ss ? getSheetAccessEmails(ss) : [];
+        // System Health & Guard Alerts: Send strictly to the script owner / administrator ONLY.
+        // General sheet collaborators (e.g. Claire, Ronald) must NEVER receive technical guard/system alerts.
+        const recipients = [];
         const props = PropertiesService.getScriptProperties();
         const configuredAlertEmails = props.getProperty('ALERT_EMAILS');
         if (configuredAlertEmails) {
             configuredAlertEmails.split(/[,;\s]+/).forEach(em => {
-                if (em && em.includes('@') && !recipients.includes(em.trim().toLowerCase())) {
-                    recipients.push(em.trim().toLowerCase());
+                const clean = em ? em.trim().toLowerCase() : '';
+                if (clean && clean.includes('@') && !recipients.includes(clean)) {
+                    recipients.push(clean);
                 }
             });
         }
+
+        // Script owner (effective user under whose authority the trigger executes)
         if (!recipients.length) {
             try {
                 const userEmail = Session.getEffectiveUser().getEmail();
-                if (userEmail && userEmail.includes('@')) recipients.push(userEmail);
+                if (userEmail && userEmail.includes('@')) {
+                    recipients.push(userEmail.trim().toLowerCase());
+                }
             } catch (e) { }
+        }
+
+        // Guaranteed fallback to firm script administrator
+        if (!recipients.length) {
+            recipients.push('moses@agri-experience.com');
         }
 
         if (recipients.length > 0) {
@@ -6958,7 +6974,7 @@ function notifyAdminAlert(subject, body) {
                     Logger.log(`[Admin Alert] Failed to send email to ${recipient}: ${sendErr.message}`);
                 }
             });
-            Logger.log(`[Admin Alert] Dispatched "${subject}" alert to ${recipients.join(', ')}`);
+            Logger.log(`[Admin Alert] Dispatched "${subject}" alert strictly to script owner: ${recipients.join(', ')}`);
         }
     } catch (err) {
         Logger.log(`[Admin Alert Error] ${err.message}`);
