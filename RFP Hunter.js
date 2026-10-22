@@ -7330,11 +7330,19 @@ const CORE_SEED_KEYWORDS = [
     'gmo', 'gmos', 'gmo seed', 'gmo seeds', 'gmo crops', 'gmo variety',
     'genetically modified', 'genetically modified organism', 'genetically modified organisms',
     'genetically modified crop', 'genetically modified crops', 'genetically modified seed', 'genetically modified seeds',
+    'living modified organism', 'living modified organisms', 'lmo', 'lmos',
+    'cartagena protocol', 'cartagena protocol on biosafety',
     'transgenic', 'transgenic crops', 'transgenic seeds',
     'biosafety', 'biosafety regulation', 'biosafety regulatory', 'biosafety framework', 'biosafety guidelines',
     'national biosafety authority', 'national biosafety', 'agricultural biotechnology', 'biotechnology regulation',
     'biotech seed', 'biotech crops', 'bt cotton', 'bt maize', 'bt cowpea',
-    'gene editing', 'genome editing', 'crispr',
+    'tela maize', 'pbr cowpea', 'pod borer resistant cowpea', 'wema',
+    'confined field trial', 'confined field trials', 'cft', 'environmental release', 'commercial release of gmo',
+    'gene editing', 'genome editing', 'crispr', 'gene drive', 'synthetic biology',
+    // Francophone GMO & Biotechnology Terms
+    'ogm', 'organismes génétiquement modifiés', 'organisme génétiquement modifié',
+    'biosécurité', 'cadre national de biosécurité', 'biotechnologie agricole',
+    'culture transgénique', 'semences ogm', 'édition génomique', 'édition du génome', 'dossier de biosécurité',
     'seed advisory', 'seed advisory services', 'seed advisory platform', 'seed extension', 'seed technology',
     'seed systems advisory', 'seed digital platform', 'seed capacity building', 'seed company training',
     'seed sector capacity building', 'breeder training', 'seed inspector training', 'renforcement des capacités semencières',
@@ -7448,7 +7456,7 @@ function getAgriMatchScore(text) {
     const secondaryHits = countDistinctKeywordHits(lower, SECONDARY_AGRI_KEYWORDS);
     const procurementSignal = /\b(rfp|rfq|eoi|expression of interest|request for proposals?|request for quotations?|tender|call for proposals?|call for concept notes?|consultancy|procurement notice|rfcn|cfcn|call for applications?|terms of reference|tor|appel\s+[aà]\s+propositions?|appel\s+d['’]offres?|manifestation\s+d['’]int[eé]r[eê]t|avis\s+de\s+sollicitation|ami\b|asmi\b)\b/i.test(lower);
     const isAgriInstitution = /\b(?:agra|alliance for a green revolution in africa|cimmyt|ilri|aatf|asareca|coraf|cgiar|fao|ifad)\b/i.test(lower);
-    const agricultureSignal = coreHits > 0 || secondaryHits > 0 || /\b(seed|seeds|semence|semences|agriculture|agribusiness|agrifood|agri-food|food\s+systems?|crop|crops|farmer|farmers|farm|farms|farming|smallholder|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|planting materials?|mat[eé]riel\s+v[eé]g[eé]tal|agtech|agritech|agri[-\s]?tech|advisory|conseil\s+agricole|vulgarisation|agri[-\s]?enterprise|policy\s+advocacy|block\s+farm|producteurs?|riz|vacs|adapted\s+crops?|orphan\s+crops?|gmo|gmos|biosafety|bios[eé]curit[eé]|biotech|transgenic|genetically\s+modified|intrants?\s+agricoles?)\b/i.test(lower) || (isAgriInstitution && procurementSignal);
+    const agricultureSignal = coreHits > 0 || secondaryHits > 0 || /\b(seed|seeds|semence|semences|agriculture|agribusiness|agrifood|agri-food|food\s+systems?|crop|crops|farmer|farmers|farm|farms|farming|smallholder|agrodealer|agro-dealer|agro\s+dealer|agrodelear|agro-delear|planting materials?|mat[eé]riel\s+v[eé]g[eé]tal|agtech|agritech|agri[-\s]?tech|advisory|conseil\s+agricole|vulgarisation|agri[-\s]?enterprise|policy\s+advocacy|block\s+farm|producteurs?|riz|vacs|adapted\s+crops?|orphan\s+crops?|gmo|gmos|ogm|ogms|lmo|lmos|biosafety|bios[eé]curit[eé]|biotech|biotechnologie|transgenic|transg[eé]nique|genetically\s+modified|cartagena\s+protocol|intrants?\s+agricoles?)\b/i.test(lower) || (isAgriInstitution && procurementSignal);
 
     // An opportunity with zero seed keywords, zero secondary agri keywords, and no agricultural signal
 
