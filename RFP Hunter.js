@@ -4288,11 +4288,7 @@ function processSerperFallbackItems(items, siteDomain, feed, existingLinks, exis
             const parsedDate = parseDateFlexible(itemDate);
             if (parsedDate && !isNaN(parsedDate.getTime())) {
                 const pubYear = parsedDate.getFullYear();
-                if (pubYear < currentYear - 1 && !/\b202[6-9]\b/.test(title + ' ' + rawSnippet)) {
-                    if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
-                    return;
-                }
-                if (!isOnOrAfterFreshnessFloor(parsedDate) && !/\b202[6-9]\b/.test(title + ' ' + rawSnippet)) {
+                if (pubYear < currentYear || !isOnOrAfterFreshnessFloor(parsedDate)) {
                     if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
                     return;
                 }
@@ -6369,14 +6365,15 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
         if (parsedPubDate && !isNaN(parsedPubDate.getTime())) {
             const pubYear = parsedPubDate.getFullYear();
             const currentYear = getCurrentYear();
-            if (pubYear < currentYear && !/\b202[6-9]\b/.test(combinedText)) {
+            const closingCheck = heuristicClosingCheck(combinedText);
+            const hasFutureClosing = closingCheck.isOpen && closingCheck.closingDate !== 'Not Specified';
+
+            if (pubYear < currentYear && !hasFutureClosing) {
                 if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
 
                 return;
             }
-            const closingCheck = heuristicClosingCheck(combinedText);
-            const hasFutureClosing = closingCheck.isOpen && closingCheck.closingDate !== 'Not Specified';
-            if (!isOnOrAfterFreshnessFloor(parsedPubDate) && !hasFutureClosing && !/\b202[6-9]\b/.test(combinedText)) {
+            if (!isOnOrAfterFreshnessFloor(parsedPubDate) && !hasFutureClosing) {
                 if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
 
                 return;
