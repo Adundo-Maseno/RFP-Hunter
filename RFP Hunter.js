@@ -690,7 +690,7 @@ const CONFIG = {
             enabled: true,
             assumeAfrican: true,
             queries: [
-                'site:candid.org ("Request for Proposals" OR "Call for Proposals" OR "RFP" OR "grants")',
+                'site:candid.org ("Request for Proposals" OR "Call for Proposals" OR "RFP" OR "grants") when:15d',
                 '("candid.org" OR "Gates Foundation" OR "Rockefeller Foundation" OR "Mastercard Foundation") ("Call for Proposals" OR "Request for Proposals" OR "RFP" OR "Grant Opportunity") ("seed" OR "agriculture" OR "agribusiness" OR "food security") Africa when:15d'
             ]
         },
