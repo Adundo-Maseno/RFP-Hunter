@@ -1398,13 +1398,38 @@ function runRfpTrackerV4() {
         // Apply clean opportunity title formatting to strip file extensions, slug hyphens, etc.
         item.title = formatCleanOpportunityTitle(item.title);
 
-        // CALIBRATION 1C: Individual Consultancy Filter
-        // Agri Experience is a corporate consulting firm. Filter out all freelance individual consultancies.
+        // CALIBRATION 1B-2: Post-Extraction Deduplication
+        // If AI title extraction or roundup alignment refined the title, re-verify against all tracked sheet titles
+        const postExtractedKey = normalizeTitleKey(item.title);
+        if (isFuzzyTitleDuplicate(postExtractedKey, existingTitleKeys)) {
+            Logger.log(`[Post-Extraction Duplicate Guard] Filtered duplicate opportunity: "${item.title}" (already tracked in sheet)`);
+            evalResult.isGenuineOpportunity = false;
+            evalResult.isOpen = false;
+            evalResult.score = 0;
+            evalResult.businessFit = 'NONE';
+            evalResult.goNoGo = 'NO-GO';
+            evalResult.summary = `Duplicate opportunity already tracked in Active/Filtered sheets under title: "${item.title}".`;
+            const oppCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link, item.source, evalResult.country);
+            filteredRowsToAppend.push([
+                now,
+                item.source,
+                item.title,
+                item.link,
+                `Duplicate of previously tracked opportunity in Active/Filtered sheets — ${evalResult.summary}`,
+                oppCountry
+            ]);
+            existingLinks.add(item.link);
+            existingTitleKeys.add(postExtractedKey);
+            return;
+        }
+
+        // CALIBRATION 1C: Individual Consultancy & Advisor Filter
+        // Agri Experience is a corporate consulting firm. Filter out all freelance individual consultancies and single advisory roles.
         // Evaluated using the aligned/refined title to catch individual roles previously masked by generic titles.
         const combinedIndividualText = `${item.title} ${item.description || ''} ${evalResult.summary || ''}`.toLowerCase();
-        const INDIVIDUAL_CONSULTANCY_REGEX = /\b(?:national\s+consultants?|individual\s+consultants?|individual\s+consultancy|junior\s+consultants?|senior\s+consultants?|senior\s+advisors?|individual\s+contractors?|individual\s+specialists?|consultant\s+individuel|consultante\s+individuelle|international\s+individual|national\s+individual|recrutement\s+d'un\s+consultant\s+individuel|recrutement\s+d'un\s+consultant\s+\(individuel\)|selection\s+of\s+individual\s+consultants?|single\s+consultant|solo\s+consultant|personal\s+consultant|nob\s+level|noa\s+level|noc\s+level)\b/i;
+        const INDIVIDUAL_CONSULTANCY_REGEX = /\b(?:national\s+consultants?|individual\s+consultants?|individual\s+consultancy|junior\s+consultants?|senior\s+consultants?|senior\s+advisors?|technical\s+advisors?(?:\s+ii)?|taat\s+technical\s+advisor|individual\s+contractors?|individual\s+specialists?|consultant\s+individuel|consultante\s+individuelle|international\s+individual|national\s+individual|recrutement\s+d'un\s+consultant\s+individuel|recrutement\s+d'un\s+consultant\s+\(individuel\)|selection\s+of\s+individual\s+consultants?|single\s+consultant|solo\s+consultant|personal\s+consultant|nob\s+level|noa\s+level|noc\s+level|external\s+collaborator|expert\s+pool|agribusiness\s+and\s+livelihoods\s+advisor)\b/i;
         const isIndividualConsultancy = INDIVIDUAL_CONSULTANCY_REGEX.test(combinedIndividualText) ||
-            /\b(?:individual\s+consultants?|junior\s+consultants?|national\s+consultants?|individual\s+consultancy)\b/i.test(item.title);
+            /\b(?:individual\s+consultants?|junior\s+consultants?|national\s+consultants?|individual\s+consultancy|technical\s+advisors?(?:\s+ii)?|taat\s+technical\s+advisor|senior\s+advisors?|individual\s+specialists?|individual\s+contractors?|external\s+collaborator|expert\s+pool)\b/i.test(item.title);
         const hasFirmContext = /\b(?:consulting\s+firms?|consortium|institutional|firm|agency|company)\b/i.test(item.title);
         if (isIndividualConsultancy && !hasFirmContext) {
             Logger.log(`[Individual Consultancy Filter] Strictly filtered out individual consultancy: "${item.title}"`);
@@ -1649,6 +1674,7 @@ function runRfpTrackerV4() {
             formattedModality
         ]);
         existingLinks.add(item.link);
+        existingTitleKeys.add(postExtractedKey);
         sourceStats[item.source] = (sourceStats[item.source] || 0) + 1;
         if (evalResult.isOpen && evalResult.score >= CONFIG.MIN_SCORE_FOR_ALERT) {
             highPriorityMatches.push({ source: item.source, title: item.title, link: item.link, country: opportunityCountry, biddingModality: formattedModality, ...evalResult });
@@ -5040,11 +5066,14 @@ function auditTrackedOpportunitiesStatus(sheet) {
             let country = String(fullValues[i][10] || '').trim(); // Col 11: Country
             let modality = String(fullValues[i][11] || '').trim(); // Col 12: Bidding Modality
 
-            // 1. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds, historical archive calls)
+            // 1. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds, historical archive calls, individual consultancies)
             const isHistoricalArchiveNotice = /\b(?:remittances in times of crisis|digital advisory services to support accelerated rural transformation|integrated fish rice vegetable food systems|grant to apply results-based management.*rural transformation|strengthening the macadamia nuts export value chain|scale-up of agtech and fintech solutions through ifad|artificial intelligence solutions for impact results)\b/i.test(title + ' ' + summary) ||
                 (/\b(201\d|202[0-4])\b/.test(title + ' ' + summary) && !/\b202[6-9]\b/.test(title + ' ' + summary) && (closing === 'Not Specified' || !closing));
 
-            const isLegacyContradiction = isHistoricalArchiveNotice ||
+            const isIndividualConsultancyRow = (/\b(?:taat\s+technical\s+advisor|technical\s+advisor(?:\s+ii)?|seed\s+systems?\s+advisor|agribusiness\s+and\s+livelihoods\s+advisor|advisors?\s+at\s+gauteng|senior\s+advisors?|individual\s+consultants?|consultant\s+individuel|individual\s+specialists?|individual\s+contractors?|external\s+collaborator)\b/i.test(title + ' ' + summary)) &&
+                !/\b(?:consulting\s+firms?|consortium|company)\b/i.test(title);
+
+            const isLegacyContradiction = isHistoricalArchiveNotice || isIndividualConsultancyRow ||
                 /\b(?:personal social media advertisement|vendor offering services rather than|focuses (?:primarily )?on the medical sector|medical sector rather than agriculture|completely unrelated to agriculture|homestead garden[-_\s]+crop seeds|fair recruitment and migrant support|mrcs and peas|migrant resource centres?)\b/i.test(summary + ' ' + title) ||
                 /\b(?:homestead garden[-_\s]+crop seeds)\b/i.test(title);
 
@@ -5537,9 +5566,9 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
        isGenuineOpportunity: FALSE, isOpen: FALSE, businessFit: "NONE", score: 0, goNoGo: "NO-GO",
        with summary stating: "Startup pitch competition / innovation contest or cash prize challenge for individuals/startups, not an institutional consultancy procurement tender or development grant."
 
-       MANDATORY FILTER: INDIVIDUAL CONSULTANCIES (FIRM PROPOSALS ONLY):
-       Agri Experience Ltd is a consulting firm that pursues institutional RFPs, consortia, and firm contracts, NOT single freelance individual assignments.
-       Solicitations explicitly targeting an "Individual Consultant", "Individual Contractor", "Individual Specialist", "Personal Consultancy", "National Consultant" (individual level), or "Consultant Individuel" MUST be classified as:
+       MANDATORY FILTER: INDIVIDUAL CONSULTANCIES & ADVISORY ROLES (FIRM PROPOSALS ONLY):
+       Agri Experience Ltd is a consulting firm that pursues institutional RFPs, consortia, and firm contracts, NOT single freelance individual assignments or personal posts.
+       Solicitations targeting an "Individual Consultant", "Technical Advisor", "Advisor", "Senior Advisor", "External Collaborator", "Individual Contractor", "Individual Specialist", "Personal Consultancy", "National Consultant" (individual level), or "Consultant Individuel" (such as "TAAT Technical Advisor - Seed Systems", "Agribusiness Advisor", "Technical Advisor II", "External Collaborator") MUST be classified as:
        isGenuineOpportunity: FALSE, isOpen: FALSE, businessFit: "NONE", score: 0, goNoGo: "NO-GO",
        with summary stating: "Individual consultancy assignment reserved for single freelance individuals, not consulting firms/organizations."
 
@@ -6127,6 +6156,9 @@ function stripQueryAndHash(url) {
 
 function looksLikeNonListingBoilerplate(title, link, listingPageUrl, description) {
     const trimmedTitle = (title || '').trim();
+    const hasFirmContext = /\b(?:consulting\s+firms?|consortium|company)\b/i.test(trimmedTitle);
+    const isIndividualRoleNotice = /\b(?:taat\s+technical\s+advisor|technical\s+advisor(?:\s+ii)?|seed\s+systems?\s+advisor|agribusiness\s+and\s+livelihoods\s+advisor|advisors?\s+at\s+gauteng|national\s+consultant|consultant\s+individuel|external\s+collaborator)\b/i.test(trimmedTitle);
+    if (isIndividualRoleNotice && !hasFirmContext) return true;
     if (NON_LISTING_TITLE_PATTERNS.some(re => re.test(trimmedTitle))) return true;
     if (listingPageUrl && stripQueryAndHash(link) === stripQueryAndHash(listingPageUrl)) return true;
 
@@ -7195,6 +7227,8 @@ function normalizeTitleKey(title) {
     if (!/\s/.test(clean) && /(?:[-_][a-zA-Z0-9]+){2,}/.test(clean)) {
         clean = clean.replace(/[-_]+/g, ' ');
     }
+    // Strip leading institutional agency/donor names (e.g. "IITA - ...", "AfDB - ...", "AGRA - ...")
+    clean = clean.replace(/^(?:iita|afdb|cgiar|cimmyt|icrisat|agra|ilri|aatf|asareca|coraf|fao|world\s+bank|undp|unicef|unido|fara|giz|enabel|snv)\s*[-–—:\/|]?\s*/gi, '');
     clean = clean.replace(/^(?:call for (?:expressions? of interest|eoi|proposals?|concept notes?|applications?)(?:\s*\([a-z0-9\s]+\))?|request for (?:proposals?|quotations?|concept notes?|rfp|rfq)(?:\s*\([a-z0-9\s]+\))?|expressions? of interest(?:\s*\([a-z0-9\s]+\))?|eoi|rfp|rfq|rfcn|tor|terms of reference(?:\s*for)?|invitation to (?:bid|tender)|tender(?:\s+\d{4})?|consultancy services?(?:\s*for)?|consultancy for)\s*[:\-\–\—\.\/]?\s*/gi, '');
     return clean.replace(/[^a-z0-9]+/g, ' ').trim().substring(0, 150);
 }
@@ -7211,6 +7245,11 @@ function isFuzzyTitleDuplicate(newKey, existingKeys) {
     if (newKey.length < 12) return false;
 
     const country1 = extractCountryTokenFromKey(newKey);
+    const newWords = newKey.split(' ');
+    const t1Sub = new Set(newWords.filter(w => w.length > 2 && !DUP_STOPWORDS.has(w)));
+    const t1All = new Set(newWords.filter(w => w.length > 2));
+    const hasT1Sub = t1Sub.size >= 3;
+    const hasT1All = t1All.size >= 4;
 
     for (const existing of existingKeys) {
         if (existing.length < 12) continue;
@@ -7226,25 +7265,29 @@ function isFuzzyTitleDuplicate(newKey, existingKeys) {
             return true;
         }
 
+        const existingWords = existing.split(' ');
+
         // Substantive token overlap check (stripping common procurement noise words)
-        const t1Sub = new Set(newKey.split(' ').filter(w => w.length > 2 && !DUP_STOPWORDS.has(w)));
-        const t2Sub = new Set(existing.split(' ').filter(w => w.length > 2 && !DUP_STOPWORDS.has(w)));
-        if (t1Sub.size >= 3 && t2Sub.size >= 3) {
-            let common = 0;
-            t1Sub.forEach(w => { if (t2Sub.has(w)) common++; });
-            if (common / Math.min(t1Sub.size, t2Sub.size) >= 0.75) {
-                return true;
+        if (hasT1Sub) {
+            const t2Sub = new Set(existingWords.filter(w => w.length > 2 && !DUP_STOPWORDS.has(w)));
+            if (t2Sub.size >= 3) {
+                let common = 0;
+                t1Sub.forEach(w => { if (t2Sub.has(w)) common++; });
+                if (common / Math.min(t1Sub.size, t2Sub.size) >= 0.75) {
+                    return true;
+                }
             }
         }
 
         // Broad token overlap check for general titles
-        const t1All = new Set(newKey.split(' ').filter(w => w.length > 2));
-        const t2All = new Set(existing.split(' ').filter(w => w.length > 2));
-        if (t1All.size >= 4 && t2All.size >= 4) {
-            let common = 0;
-            t1All.forEach(w => { if (t2All.has(w)) common++; });
-            if (common / Math.min(t1All.size, t2All.size) >= 0.80) {
-                return true;
+        if (hasT1All) {
+            const t2All = new Set(existingWords.filter(w => w.length > 2));
+            if (t2All.size >= 4) {
+                let common = 0;
+                t1All.forEach(w => { if (t2All.has(w)) common++; });
+                if (common / Math.min(t1All.size, t2All.size) >= 0.80) {
+                    return true;
+                }
             }
         }
     }
