@@ -295,7 +295,8 @@ const CONFIG = {
     // rejected before AI; candidates scoring 2+ proceed to evaluation.
 
     MIN_RELEVANCE_SCORE: 2,
-    FRESHNESS_MONTHS_BACK: 1,
+    FRESHNESS_DAYS_BACK: 15,
+    FRESHNESS_MONTHS_BACK: 15, // Configured as 15 days back per user requirement
     // Current Gemini production/preview-compatible Flash chain.
 
     // Reference: https://ai.google.dev/gemini-api/docs/models
@@ -658,9 +659,9 @@ const CONFIG = {
             enabled: true,
             assumeAfrican: true,
             queries: [
-                'site:linkedin.com/posts ("Request for Proposals" OR "Call for Proposals" OR "Call for Applications" OR "Call for Concept Notes" OR "Expression of Interest" OR RFP OR EOI OR "Appel à propositions") ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "agritech") Africa when:30d',
-                'site:facebook.com ("Request for Proposals" OR "Call for Proposals" OR "Call for Concept Notes" OR "tender" OR "Appel d\'offres") ("seed" OR "semence" OR "agriculture" OR "agribusiness") Africa when:30d',
-                '(site:x.com OR site:twitter.com) ("Request for Proposals" OR "Call for Proposals" OR "Call for Concept Notes" OR "tender") ("seed" OR "semence" OR "agriculture" OR "agribusiness") Africa when:30d'
+                'site:linkedin.com/posts ("Request for Proposals" OR "Call for Proposals" OR "Call for Applications" OR "Call for Concept Notes" OR "Expression of Interest" OR RFP OR EOI OR "Appel à propositions") ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "agritech") Africa when:15d',
+                'site:facebook.com ("Request for Proposals" OR "Call for Proposals" OR "Call for Concept Notes" OR "tender" OR "Appel d\'offres") ("seed" OR "semence" OR "agriculture" OR "agribusiness") Africa when:15d',
+                '(site:x.com OR site:twitter.com) ("Request for Proposals" OR "Call for Proposals" OR "Call for Concept Notes" OR "tender") ("seed" OR "semence" OR "agriculture" OR "agribusiness") Africa when:15d'
             ]
         },
         {
@@ -669,8 +670,8 @@ const CONFIG = {
             enabled: true,
             assumeAfrican: true,
             queries: [
-                'site:developmentaid.org/tenders ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "crops" OR "planting materials") Africa when:30d',
-                'site:developmentaid.org/grants ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "grant" OR "crops") Africa when:30d'
+                'site:developmentaid.org/tenders ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "crops" OR "planting materials") Africa when:15d',
+                'site:developmentaid.org/grants ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "grant" OR "crops") Africa when:15d'
             ]
         },
         {
@@ -679,8 +680,8 @@ const CONFIG = {
             enabled: true,
             assumeAfrican: true,
             queries: [
-                'site:devex.com ("Request for Proposals" OR "Call for Proposals" OR "tender" OR "grant" OR "Expression of Interest") ("seed" OR "agriculture" OR "agribusiness" OR "crops" OR "food security") Africa when:30d',
-                'site:devex.com/funding ("seed" OR "agriculture" OR "agribusiness" OR "crops" OR "food security") Africa when:30d'
+                'site:devex.com ("Request for Proposals" OR "Call for Proposals" OR "tender" OR "grant" OR "Expression of Interest") ("seed" OR "agriculture" OR "agribusiness" OR "crops" OR "food security") Africa when:15d',
+                'site:devex.com/funding ("seed" OR "agriculture" OR "agribusiness" OR "crops" OR "food security") Africa when:15d'
             ]
         },
         {
@@ -690,7 +691,7 @@ const CONFIG = {
             assumeAfrican: true,
             queries: [
                 'site:candid.org ("Request for Proposals" OR "Call for Proposals" OR "RFP" OR "grants")',
-                '("candid.org" OR "Gates Foundation" OR "Rockefeller Foundation" OR "Mastercard Foundation") ("Call for Proposals" OR "Request for Proposals" OR "RFP" OR "Grant Opportunity") ("seed" OR "agriculture" OR "agribusiness" OR "food security") Africa when:60d'
+                '("candid.org" OR "Gates Foundation" OR "Rockefeller Foundation" OR "Mastercard Foundation") ("Call for Proposals" OR "Request for Proposals" OR "RFP" OR "Grant Opportunity") ("seed" OR "agriculture" OR "agribusiness" OR "food security") Africa when:15d'
             ]
         },
         {
@@ -699,8 +700,8 @@ const CONFIG = {
             enabled: true,
             assumeAfrican: true,
             queries: [
-                'site:gavi.org ("Request for Proposals" OR "Call for Proposals" OR "Call for Applications" OR "tender" OR "EOI" OR "consultancy" OR "funding") Africa when:30d',
-                'site:ungm.org/Public/Notice "Gavi" when:30d'
+                'site:gavi.org ("Request for Proposals" OR "Call for Proposals" OR "Call for Applications" OR "tender" OR "EOI" OR "consultancy" OR "funding") Africa when:15d',
+                'site:ungm.org/Public/Notice "Gavi" when:15d'
             ]
         },
         {
@@ -758,9 +759,12 @@ const FETCH_OPTIONS = {
 
 function getFreshnessFloorDate() {
     const d = new Date();
-    d.setDate(1);
     d.setHours(0, 0, 0, 0);
-    d.setMonth(d.getMonth() - CONFIG.FRESHNESS_MONTHS_BACK);
+    // User requested 15 days freshness window (configured via FRESHNESS_MONTHS_BACK or FRESHNESS_DAYS_BACK)
+    const daysBack = (typeof CONFIG.FRESHNESS_DAYS_BACK === 'number') ? CONFIG.FRESHNESS_DAYS_BACK :
+                     (typeof CONFIG.FRESHNESS_DAYS === 'number') ? CONFIG.FRESHNESS_DAYS :
+                     (typeof CONFIG.FRESHNESS_MONTHS_BACK === 'number' && CONFIG.FRESHNESS_MONTHS_BACK > 1) ? CONFIG.FRESHNESS_MONTHS_BACK : 15;
+    d.setDate(d.getDate() - daysBack);
     return d;
 }
 
@@ -2764,7 +2768,7 @@ function fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedSta
         if (!link) return;
         if (publicationDate) {
             const pDate = parseDateFlexible(publicationDate);
-            if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear()) {
+            if (pDate && !isNaN(pDate.getTime()) && !isOnOrAfterFreshnessFloor(pDate)) {
                 if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
                 return;
             }
@@ -3760,8 +3764,8 @@ function queryUnjobnetRssFallback(feed, existingLinks, existingTitleKeys, bucket
         name: feed.name,
         type: 'GOOGLE_NEWS_RSS_SOCIAL',
         queries: [
-            'site:unjobnet.org ("seed" OR "crops" OR "agriculture" OR "agribusiness" OR "consultant") Africa when:30d',
-            'site:unjobnet.org ("Request for Proposals" OR "Call for Proposals" OR "EOI" OR "Tender") Africa when:30d'
+            'site:unjobnet.org ("seed" OR "crops" OR "agriculture" OR "agribusiness" OR "consultant") Africa when:15d',
+            'site:unjobnet.org ("Request for Proposals" OR "Call for Proposals" OR "EOI" OR "Tender") Africa when:15d'
         ]
     };
     fetchGoogleNewsSocialNotices(rssFeed, existingLinks, existingTitleKeys, bucket, feedStats);
@@ -3916,7 +3920,7 @@ function fetchGlobalSouthOpportunitiesNotices(feed, existingLinks, existingTitle
         const pubDateStr = dateMatch ? dateMatch[1].trim() : '';
         if (pubDateStr) {
             const pDate = parseDateFlexible(pubDateStr);
-            if (pDate && !isNaN(pDate.getTime()) && pDate.getFullYear() < getCurrentYear()) {
+            if (pDate && !isNaN(pDate.getTime()) && !isOnOrAfterFreshnessFloor(pDate)) {
                 if (feedStats) { feedStats.seen++; feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
                 continue;
             }
@@ -4288,6 +4292,10 @@ function processSerperFallbackItems(items, siteDomain, feed, existingLinks, exis
                     if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
                     return;
                 }
+                if (!isOnOrAfterFreshnessFloor(parsedDate) && !/\b202[6-9]\b/.test(title + ' ' + rawSnippet)) {
+                    if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                    return;
+                }
             } else if (/\b(201\d|202[0-4])\b/.test(itemDate) && !/\b202[6-9]\b/.test(title + ' ' + rawSnippet)) {
                 if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
                 return;
@@ -4337,7 +4345,7 @@ function processSerperFallbackItems(items, siteDomain, feed, existingLinks, exis
 function queryPortalRssFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     const termsList = Array.isArray(queryTerms) ? queryTerms.slice(0, 4) : [queryTerms];
     const termsStr = termsList.map(t => (t.includes(' ') && !t.startsWith('"')) ? `"${t}"` : t).join(' OR ');
-    const rssQuery = `site:${siteDomain} (${termsStr}) Africa when:60d`;
+    const rssQuery = `site:${siteDomain} (${termsStr}) Africa when:15d`;
     Logger.log(`[${feed.name}] Free Google News RSS fallback engaged for ${siteDomain}: "${rssQuery}"`);
     const rssFeed = {
         name: feed.name,
@@ -6353,9 +6361,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
     }
 
     // Universal Publication Date Freshness Gate:
-    // Discard only if the explicit publication date is from a prior calendar year (e.g. 2025, 2024)
-    // without any current or future year (2026+) context in the listing.
-    // Fresh opportunities from the current year (2026+) or rolling/dateless opportunities must NEVER be dropped.
+    // Discard if the explicit publication date is older than 15 days (unless there is an explicit future closing date).
     const pubDateMatch = combinedText.match(/\b(?:published|date)[\s:]+([a-z0-9,\s\/:\-]+?)(?:\s*\||\s*\]|\s*$)/i);
     if (pubDateMatch) {
         const rawPubDate = pubDateMatch[1].trim();
@@ -6364,6 +6370,13 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
             const pubYear = parsedPubDate.getFullYear();
             const currentYear = getCurrentYear();
             if (pubYear < currentYear && !/\b202[6-9]\b/.test(combinedText)) {
+                if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+
+                return;
+            }
+            const closingCheck = heuristicClosingCheck(combinedText);
+            const hasFutureClosing = closingCheck.isOpen && closingCheck.closingDate !== 'Not Specified';
+            if (!isOnOrAfterFreshnessFloor(parsedPubDate) && !hasFutureClosing && !/\b202[6-9]\b/.test(combinedText)) {
                 if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
 
                 return;
