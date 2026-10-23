@@ -6357,8 +6357,10 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
     }
 
     // Universal Publication Date Freshness Gate:
+    // Universal Publication Date Freshness Gate:
     // Discard if the explicit publication date is older than 15 days (unless there is an explicit future closing date).
-    const pubDateMatch = combinedText.match(/\b(?:published|date)[\s:]+([a-z0-9,\s\/:\-]+?)(?:\s*\||\s*\]|\s*$)/i);
+    const pubDateMatch = combinedText.match(/\b(?:published|posted(?:\s+on)?|date(?:\s+posted)?|release\s+date|issue\s+date|publi[eé](?:\s+le)?|date\s+de\s+publication)[\s:]+([a-z0-9,\s\/:\-]+?)(?:\s*\||\s*\]|\s*—|\s*-\s+[a-z]|\s*$)/i) ||
+        combinedText.match(/^\s*(\d+\s+(?:days?|weeks?|months?)\s+ago|\w+\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+\w+\s+\d{4})\s*(?:—|-)\s*/i);
     if (pubDateMatch) {
         const rawPubDate = pubDateMatch[1].trim();
         const parsedPubDate = parseDateFlexible(rawPubDate);
@@ -6407,8 +6409,9 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
         }
     }
 
-    // Pre-AI physical goods/equipment supply check: discard pure supply and delivery of equipment or farming input kits
-    const isPhysicalEquipmentSupply = /\b(?:supply\s+(?:and|&)\s+delivery\s+of\s+equipment|farming\s+inputs?\s+kits?)\b/i.test(combinedText);
+    // Pre-AI physical goods/equipment supply check: discard pure supply and delivery of physical seed bags, fertilizers, equipment or farming input kits
+    const isPhysicalEquipmentSupply = /\b(?:supply\s+(?:and|&)\s+delivery\s+of|fourniture\s+et\s+livraison\s+de)\s+(?:(?:[0-9,\s]+)?(?:bags?|tonnes?|metric\s+tons?|sacs?|kgs?)\s+of\s+)?(?:certified\s+|commercial\s+|improved\s+|crop\s+)?(?:maize|corn|sorghum|millet|rice|cowpea|beans?|soya|vegetable|cotton|sunflower|wheat|potato|pasture)?\s*(?:seeds?|semences?|fertilizers?|engrais|equipment|farming\s+inputs?\s+kits?)\b/i.test(combinedText) ||
+        /\b(?:supply\s+(?:and|&)\s+delivery\s+of\s+equipment|farming\s+inputs?\s+kits?)\b/i.test(combinedText);
     if (isPhysicalEquipmentSupply && !/\b(?:advisory|consultanc(?:y|ies)|study|assessment|policy|strategy|evaluation|training|capacity\s+building|formation|renforcement|[eé]tude|strat[eé]gie|politique|conseil)\b/i.test(combinedText)) {
         if (feedStats) { feedStats.lowRelevance++; feedStats.filtered++; feedStats.preAiRejected++; }
 
@@ -6708,18 +6711,15 @@ function resolveBiddingModality(biddingModality, partnerStrategy, score, goNoGo,
 
 function heuristicClosingCheck(description) {
     if (!description) return { isOpen: true, closingDate: 'Not Specified' };
-    const monthNames = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Sept|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+    const monthNames = '(?:Jan(?:uary|vier)?|F[eé]b(?:ruary|rier)?|Mar(?:ch|s)?|Avr(?:il)?|Apr(?:il)?|May|Mai|Jun(?:e)?|Juin|Jul(?:y)?|Juil(?:let)?|Aug(?:ust)?|Ao[uû]t|Sep(?:tember|tembre)?|Sept|Oct(?:ober|obre)?|Nov(?:ember|embre)?|D[eé]c(?:ember|embre)?)';
 
     // Matches: 2026-09-30, 17-Jul-2026, 17 July 2026, July 17 2026, 30/09/2026, etc.
-
     const datePattern = `(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}(?:st|nd|rd|th)?[\\s\\/\\-]+${monthNames}[\\s\\/\\-]+\\d{2,4}|${monthNames}[\\s\\/\\-]+\\d{1,2}(?:st|nd|rd|th)?,?[\\s\\/\\-]+\\d{4}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})`;
-    const closingContextRegex = new RegExp(`(?:clos\\w*|deadline|due date|due by|expir\\w*|submission)[^.|]{0,60}?${datePattern}`, 'i');
+    const closingContextRegex = new RegExp(`(?:clos\\w*|deadline|due date|due by|expir\\w*|submission|date\\s+limite|cl[oô]ture|[eé]ch[eé]ance|d[eé]p[oô]t\\s+des\\s+offres)[^.|]{0,60}?${datePattern}`, 'i');
     const match = description.match(closingContextRegex);
 
     // Only evaluate deadline if explicitly preceded by a closing/deadline keyword.
-
     // Never fall back to arbitrary dates (e.g. publication dates, historical references) as deadlines.
-
     if (!match) return { isOpen: true, closingDate: 'Not Specified' };
     const rawDate = match[1];
     let parsed = parseDateFlexible(rawDate);
@@ -6738,25 +6738,90 @@ function parseDateFlexible(rawDate) {
     }
     const str = String(rawDate).trim();
     if (!str) return null;
-    const cleaned = str.replace(/(?:st|nd|rd|th)/gi, '').trim();
+
+    // Clean leading date prefixes and strip ordinals safely (only when preceded by digits)
+    let cleaned = str.replace(/(?<=\d)(?:st|nd|rd|th)\b/gi, '').trim();
+    cleaned = cleaned.replace(/^(?:le|de\s+publication|posted(?:\s+on)?|published(?:\s+on)?|issued(?:\s+on)?)[\s:]+/i, '').trim();
+
+    // 1. Relative dates: e.g., "2 days ago", "3 weeks ago", "1 month ago", "yesterday", "il y a 3 jours"
+    const relMatch = cleaned.match(/^(?:il\s+y\s+a\s+)?(\d+)\s+(minute|hour|day|week|month|year|heure|jour|semaine|mois|ann[eé]e)s?(?:\s+ago)?$/i);
+    if (relMatch) {
+        const val = parseInt(relMatch[1], 10);
+        const unit = relMatch[2].toLowerCase();
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        if (/minute|hour|heure/.test(unit)) {
+            return now;
+        } else if (/day|jour/.test(unit)) {
+            now.setDate(now.getDate() - val);
+            return now;
+        } else if (/week|semaine/.test(unit)) {
+            now.setDate(now.getDate() - (val * 7));
+            return now;
+        } else if (/month|mois/.test(unit)) {
+            now.setMonth(now.getMonth() - val);
+            return now;
+        } else if (/year|ann/.test(unit)) {
+            now.setFullYear(now.getFullYear() - val);
+            return now;
+        }
+    }
+    if (/^(?:yesterday|hier)$/i.test(cleaned)) {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() - 1);
+        return d;
+    }
+    if (/^(?:today|aujourd'hui)$/i.test(cleaned)) {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+
     if (/^\d{4}-\d{2}-\d{2}$/.test(cleaned)) return new Date(`${cleaned}T23:59:59`);
 
-    // Format: DD-Mon-YYYY or DD Month YYYY (e.g., 17-Jul-2026 or 17 July 2026)
+    const monthMap = {
+        jan: 0, january: 0, janvier: 0, janv: 0,
+        feb: 1, february: 1, 'février': 1, fevrier: 1, 'févr': 1, fevr: 1, fev: 1,
+        mar: 2, march: 2, mars: 2,
+        apr: 3, april: 3, avril: 3, avr: 3,
+        may: 4, mai: 4,
+        jun: 5, june: 5, juin: 5, jui: 5,
+        jul: 6, july: 6, juillet: 6, juil: 6,
+        aug: 7, august: 7, 'août': 7, aout: 7, aou: 7,
+        sep: 8, sept: 8, september: 8, septembre: 8,
+        oct: 9, october: 9, octobre: 9,
+        nov: 10, november: 10, novembre: 10,
+        dec: 11, december: 11, 'décembre': 11, decembre: 11, 'déc': 11, dec: 11
+    };
 
-    const dmyMatch = cleaned.match(/^(\d{1,2})[\s\/\-]+([a-z]+)[\s\/\-]+(\d{2,4})$/i);
+    // Format: DD-Mon-YYYY or DD Month YYYY (e.g., 17-Jul-2026 or 15 Octobre 2026)
+    const dmyMatch = cleaned.match(/^(\d{1,2})[\s\/\-]+([a-z\u00C0-\u017F]+)[\s\/\-]+(\d{2,4})$/i);
     if (dmyMatch) {
         const day = parseInt(dmyMatch[1], 10);
-        const monStr = dmyMatch[2].toLowerCase().substring(0, 3);
+        const monKey = dmyMatch[2].toLowerCase();
         let year = parseInt(dmyMatch[3], 10);
         if (year < 100) year += 2000;
-        const months = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
-        if (months[monStr] !== undefined) {
-            return new Date(year, months[monStr], day, 23, 59, 59);
+        const monIdx = (monthMap[monKey] !== undefined) ? monthMap[monKey] : monthMap[monKey.substring(0, 3)];
+        if (monIdx !== undefined) {
+            return new Date(year, monIdx, day, 23, 59, 59);
+        }
+    }
+
+    // Format: Month DD, YYYY (e.g., October 18, 2026 or Septembre 10, 2026)
+    const mdyMatch = cleaned.match(/^([a-z\u00C0-\u017F]+)[\s\/\-]+(\d{1,2}),?[\s\/\-]+(\d{2,4})$/i);
+    if (mdyMatch) {
+        const monKey = mdyMatch[1].toLowerCase();
+        const day = parseInt(mdyMatch[2], 10);
+        let year = parseInt(mdyMatch[3], 10);
+        if (year < 100) year += 2000;
+        const monIdx = (monthMap[monKey] !== undefined) ? monthMap[monKey] : monthMap[monKey.substring(0, 3)];
+        if (monIdx !== undefined) {
+            return new Date(year, monIdx, day, 23, 59, 59);
         }
     }
 
     // Format: DD/MM/YYYY or DD-MM-YYYY
-
     const numMatch = cleaned.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
     if (numMatch) {
         const d1 = parseInt(numMatch[1], 10);
@@ -6816,7 +6881,8 @@ function isGenericPortalNavigation(text, title, link) {
     const navigationTitles = [
         /^(general procurement notices|specific procurement notices|procurement plans|corporate procurement|project-related procurement)$/i,
         /^(requests? for (eoi|expression of interest)|tenders?|procurement notices?)$/i,
-        /^(home|about|contact|search|filter|results|documents|publications|procurement)$/i
+        /^(home|about|contact|search|filter|results|documents|publications|procurement)$/i,
+        /^browse\s+opportunities/i
     ];
     if (navigationTitles.some(re => re.test(rawTitle))) return true;
     const specific = /\b(rfp|rfq|eoi|expression of interest|request for proposals?|request for quotations?|tender|call for proposals?|call for concept notes?|consultancy|procurement notice)\b/i.test(rawTitle);
