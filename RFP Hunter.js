@@ -789,15 +789,26 @@ function isOnOrAfterFreshnessFloor(dateValue) {
     return parsed.getTime() >= getFreshnessFloorDate().getTime();
 }
 
-function isLikelyStaleListing(text) {
-    if (!text) return false;
-    const yearMatches = text.match(/\b(20\d{2})\b/g);
-    if (!yearMatches) return false;
+function isLikelyStaleListing(text, url) {
+    if (!text && !url) return false;
+    const combined = `${text || ''} ${url || ''}`;
+    const yearMatches = combined.match(/\b(20\d{2})\b/g);
     const currentYear = getCurrentYear();
-    const years = yearMatches.map(Number);
-    const hasRecentYear = years.some(y => y >= currentYear);
-    const hasOldYear = years.some(y => y < currentYear);
-    return hasOldYear && !hasRecentYear;
+    if (yearMatches) {
+        const years = yearMatches.map(Number);
+        const hasRecentYear = years.some(y => y >= currentYear);
+        const hasOldYear = years.some(y => y < currentYear - 1); // 2024 or older
+        if (hasOldYear && !hasRecentYear) return true;
+    }
+    // URL path slug year check (e.g. /2021/, /2020/, /2019/, -2021-)
+    if (/(?:[\/\-_])(201\d|202[0-4])(?:[\/\-_\.])/i.test(url || '') && !/\b202[6-9]\b/.test(combined)) {
+        return true;
+    }
+    // Historical crisis / pandemic programs from past project cycles (2020-2022) without 2026+ context
+    if (/\b(?:remittances in times of crisis in africa|covid[-_\s]?19 emergency response|rapid response window 202[0-2]|emergency support programme 202[0-2])\b/i.test(combined) && !/\b202[6-9]\b/.test(combined)) {
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -1569,19 +1580,38 @@ function runRfpTrackerV4() {
             return;
         }
 
-        // Filter out low-fit or NO-GO opportunities from Active Open RFPs into Filtered Out
+        // Post-AI Deterministic Freshness & Historical Archive Enforcement
+        const fullAuditText = `${item.title} ${item.description || ''} ${item.link} ${evalResult.summary || ''}`;
+        const currentYear = getCurrentYear();
+        const hasHistoricalYear = /\b(201\d|202[0-4])\b/.test(fullAuditText) || /(?:[\/\-_])(201\d|202[0-4])(?:[\/\-_\.])/i.test(item.link);
+        const hasCurrentYearContext = /\b202[6-9]\b/.test(fullAuditText) || (evalResult.closingDate && /^\d{4}-\d{2}-\d{2}$/.test(evalResult.closingDate) && evalResult.closingDate >= `${currentYear}-01-01`);
+        const isHistoricalCrisisArchive = /\b(?:remittances in times of crisis|digital advisory services to support accelerated rural transformation|integrated fish rice vegetable|results-based management.*resolve)\b/i.test(fullAuditText);
 
+        if ((hasHistoricalYear && !hasCurrentYearContext) || (isHistoricalCrisisArchive && !hasCurrentYearContext)) {
+            Logger.log(`[AI Freshness Override] Deterministically marked historical archive call as CLOSED/NO-GO: "${item.title}"`);
+            evalResult.isOpen = false;
+            evalResult.score = 0;
+            evalResult.goNoGo = 'NO-GO';
+            evalResult.closingDate = (evalResult.closingDate && evalResult.closingDate !== 'Not Specified') ? evalResult.closingDate : 'Expired / Historical Archive';
+            evalResult.summary = `Historical archived solicitation from a prior funding cycle — ${evalResult.summary || ''}`.trim();
+        }
+
+        // Filter out low-fit, NO-GO, or closed opportunities from Active Open RFPs into Filtered Out
         const minActiveScore = CONFIG.MIN_SCORE_FOR_ACTIVE_LOGGING !== undefined ? CONFIG.MIN_SCORE_FOR_ACTIVE_LOGGING : 40;
-        const isLowFitOrNoGo = evalResult.goNoGo === 'NO-GO' || (evalResult.score !== undefined && evalResult.score < minActiveScore);
+        const isClosedNotice = (CONFIG.ONLY_LOG_OPEN_PROPOSALS !== false) && !evalResult.isOpen;
+        const isLowFitOrNoGo = evalResult.goNoGo === 'NO-GO' || (evalResult.score !== undefined && evalResult.score < minActiveScore) || isClosedNotice;
         if (isLowFitOrNoGo) {
-            Logger.log(`[AI LOW-FIT/FILTERED] ${item.source} | ${item.title} | score=${evalResult.score} | goNoGo=${evalResult.goNoGo} | reason=Outside Core Focus`);
+            const filterReason = isClosedNotice 
+                ? `Closed / Expired Solicitation (Deadline: ${evalResult.closingDate || 'Passed'}) — ${evalResult.summary || 'Notice is closed'}`
+                : `Outside Core Focus (Score: ${evalResult.score || 0}, ${evalResult.goNoGo || 'NO-GO'}) — ${evalResult.summary || 'Low alignment with seed systems / agribusiness'}`;
+            Logger.log(`[AI LOW-FIT/FILTERED] ${item.source} | ${item.title} | score=${evalResult.score} | goNoGo=${evalResult.goNoGo} | reason=${isClosedNotice ? 'Closed/Expired' : 'Outside Core Focus'}`);
             const oppCountry = extractOpportunityCountries(item.title, item.description, evalResult.summary, item.link, item.source, evalResult.country);
             filteredRowsToAppend.push([
                 now,
                 item.source,
                 item.title,
                 item.link,
-                `Outside Core Focus (Score: ${evalResult.score || 0}, ${evalResult.goNoGo || 'NO-GO'}) — ${evalResult.summary || 'Low alignment with seed systems / agribusiness'}`,
+                filterReason,
                 oppCountry
             ]);
             existingLinks.add(item.link);
@@ -2222,11 +2252,14 @@ function fetchGoogleSearchNotices(feed, existingLinks, existingTitleKeys, bucket
             const data = JSON.parse(response.getContentText());
             const items = data.organic || [];
             items.forEach(item => {
+                const itemDate = item.date || '';
+                const datePrefix = itemDate ? `[Published: ${itemDate}] ` : '';
+                const description = `${datePrefix}${item.snippet || item.title || ''}`.trim();
                 addCandidateIfNew(
                     feed.name,
                     item.title || '',
                     item.link || '',
-                    item.snippet || item.title || '',
+                    description,
                     existingLinks,
                     existingTitleKeys,
                     bucket,
@@ -2747,8 +2780,9 @@ function fetchTedNotices(feed, existingLinks, existingTitleKeys, bucket, feedSta
 function fetchTedSerperFallback(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     Logger.log('[EU TED Search API] Rate-limited (HTTP 429). Free fallback engaged: querying web search providers for active African agricultural tenders on TED.');
     if (!isWebSearchAvailable()) return;
-    const query = 'site:ted.europa.eu ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "crop" OR "planting materials") ("Africa" OR "Kenya" OR "Tanzania" OR "Uganda" OR "Ethiopia" OR "Rwanda" OR "Ghana" OR "Nigeria" OR "Sahel" OR "Senegal" OR "Mali" OR "Cote d\'Ivoire") -jobs -career -vacancy';
-    const payload = { q: query, num: 10, gl: 'ke', hl: 'en' };
+    const currentYear = getCurrentYear();
+    const query = `site:ted.europa.eu ("seed" OR "semence" OR "agriculture" OR "agribusiness" OR "crop" OR "planting materials") ("Africa" OR "Kenya" OR "Tanzania" OR "Uganda" OR "Ethiopia" OR "Rwanda" OR "Ghana" OR "Nigeria" OR "Sahel" OR "Senegal" OR "Mali" OR "Cote d'Ivoire") (${currentYear} OR ${currentYear - 1}) -jobs -career -vacancy`;
+    const payload = { q: query, num: 10, gl: 'ke', hl: 'en', tbs: 'qdr:y' };
     const res = callSerperWithRotation(payload, 'TED Fallback');
     if (!res || res.getResponseCode() !== 200) return;
     try {
@@ -2757,11 +2791,13 @@ function fetchTedSerperFallback(feed, existingLinks, existingTitleKeys, bucket, 
         Logger.log(`[EU TED Search API] Serper fallback discovered ${items.length} candidate(s).`);
         items.forEach(item => {
             if (!item.title || !item.link) return;
+            const itemDate = item.date || '';
+            const datePrefix = itemDate ? `[Published: ${itemDate}] ` : '';
             addCandidateIfNew(
                 feed.name,
                 item.title,
                 item.link,
-                item.snippet || 'EU TED Notice',
+                `${datePrefix}${item.snippet || 'EU TED Notice'}`,
                 existingLinks,
                 existingTitleKeys,
                 bucket,
@@ -3642,8 +3678,9 @@ function parseCimmytWorkableJobs(jobs, feed, existingLinks, existingTitleKeys, b
 
 function fetchCimmytSerperFallback(feed, existingLinks, existingTitleKeys, bucket, feedStats) {
     if (!isWebSearchAvailable()) return;
+    const currentYear = getCurrentYear();
     const cache = (typeof CacheService !== 'undefined' && CacheService.getScriptCache) ? CacheService.getScriptCache() : null;
-    const cacheKey = 'FALLBACK_DATA_cimmyt_org';
+    const cacheKey = `FALLBACK_DATA_V2_${currentYear}_cimmyt_org`;
     if (cache) {
         try {
             const cached = cache.get(cacheKey);
@@ -3651,7 +3688,9 @@ function fetchCimmytSerperFallback(feed, existingLinks, existingTitleKeys, bucke
                 const items = JSON.parse(cached);
                 Logger.log(`[CIMMYT Opportunities] Using cached search fallback results (${items.length} items, 0 API credits used).`);
                 items.forEach(item => {
-                    addCandidateIfNew(feed.name, `CIMMYT: ${item.title}`, item.link, item.snippet || 'Buyer: CIMMYT', existingLinks, existingTitleKeys, bucket, true, null, null, null, feedStats);
+                    const itemDate = item.date || '';
+                    const datePrefix = itemDate ? `[Published: ${itemDate}] ` : '';
+                    addCandidateIfNew(feed.name, `CIMMYT: ${item.title}`, item.link, `${datePrefix}${item.snippet || 'Buyer: CIMMYT'}`, existingLinks, existingTitleKeys, bucket, true, null, null, null, feedStats);
                 });
                 return;
             }
@@ -3659,8 +3698,8 @@ function fetchCimmytSerperFallback(feed, existingLinks, existingTitleKeys, bucke
     }
 
     Logger.log('[CIMMYT Opportunities] Workable API rate-limited (HTTP 429). Free fallback engaged: querying web search providers for active CIMMYT consultancies & tenders.');
-    const query = 'site:cimmyt.org ("RFP" OR "Request for Proposals" OR "Consultancy" OR "Expression of Interest" OR "EOI" OR "Tender" OR "Procurement") ("seed" OR "maize" OR "wheat" OR "agronomy" OR "Africa" OR "Kenya" OR "Zimbabwe" OR "Ethiopia") -site:knowledgecenter.cimmyt.org -site:repository.cimmyt.org -inurl:koha -inurl:bib -inurl:bitstream -jobs -career -vacancy';
-    const payload = { q: query, num: 10, gl: 'ke', hl: 'en' };
+    const query = `site:cimmyt.org ("RFP" OR "Request for Proposals" OR "Consultancy" OR "Expression of Interest" OR "EOI" OR "Tender" OR "Procurement") ("seed" OR "maize" OR "wheat" OR "agronomy" OR "Africa" OR "Kenya" OR "Zimbabwe" OR "Ethiopia") (${currentYear} OR ${currentYear - 1}) -site:knowledgecenter.cimmyt.org -site:repository.cimmyt.org -inurl:koha -inurl:bib -inurl:bitstream -jobs -career -vacancy`;
+    const payload = { q: query, num: 10, gl: 'ke', hl: 'en', tbs: 'qdr:y' };
     const res = callSerperWithRotation(payload, 'CIMMYT Fallback');
     if (!res || res.getResponseCode() !== 200) return;
     try {
@@ -3670,11 +3709,13 @@ function fetchCimmytSerperFallback(feed, existingLinks, existingTitleKeys, bucke
         if (cache) safeCachePut(cache, cacheKey, JSON.stringify(items), 21600); // 6h TTL
         items.forEach(item => {
             if (!item.title || !item.link) return;
+            const itemDate = item.date || '';
+            const datePrefix = itemDate ? `[Published: ${itemDate}] ` : '';
             addCandidateIfNew(
                 feed.name,
                 `CIMMYT: ${item.title}`,
                 item.link,
-                item.snippet || 'Buyer: CIMMYT (International Maize and Wheat Improvement Center) / CGIAR',
+                `${datePrefix}${item.snippet || 'Buyer: CIMMYT (International Maize and Wheat Improvement Center) / CGIAR'}`,
                 existingLinks,
                 existingTitleKeys,
                 bucket,
@@ -4180,8 +4221,9 @@ function queryPortalSerperFallback(siteDomain, queryTerms, feed, existingLinks, 
         return;
     }
 
+    const currentYear = getCurrentYear();
     const safeDomain = siteDomain.replace(/[^A-Za-z0-9_]/g, '_');
-    const cacheKey = 'FALLBACK_DATA_' + safeDomain;
+    const cacheKey = `FALLBACK_DATA_V2_${currentYear}_${safeDomain}`;
     const cache = (typeof CacheService !== 'undefined' && CacheService.getScriptCache) ? CacheService.getScriptCache() : null;
 
     if (cache) {
@@ -4190,22 +4232,7 @@ function queryPortalSerperFallback(siteDomain, queryTerms, feed, existingLinks, 
             if (cachedJson) {
                 const cachedItems = JSON.parse(cachedJson);
                 Logger.log(`[${feed.name}] Using cached portal search results for ${siteDomain} (${cachedItems.length} candidate(s), 0 Serper credits used).`);
-                cachedItems.forEach(item => {
-                    addCandidateIfNew(
-                        feed.name,
-                        item.title || '',
-                        item.link || '',
-                        item.snippet || item.title || '',
-                        existingLinks,
-                        existingTitleKeys,
-                        bucket,
-                        feed.assumeAfrican === true,
-                        null,
-                        null,
-                        null,
-                        feedStats
-                    );
-                });
+                processSerperFallbackItems(cachedItems, siteDomain, feed, existingLinks, existingTitleKeys, bucket, feedStats);
                 return;
             }
         } catch (cErr) {
@@ -4215,11 +4242,13 @@ function queryPortalSerperFallback(siteDomain, queryTerms, feed, existingLinks, 
 
     const termsStr = Array.isArray(queryTerms) ? queryTerms.join(' OR ') : queryTerms;
     const geoFilter = (siteDomain === 'ifad.org' || siteDomain.includes('ifad.org')) ? ' (Africa OR Kenya OR Tanzania OR Uganda OR Ghana OR Nigeria OR Rwanda OR Ethiopia OR "Sub-Saharan")' : '';
-    const serperQuery = `site:${siteDomain} (${termsStr})${geoFilter} -jobs -career -vacancy`;
+    const yearFilter = ` (${currentYear} OR ${currentYear - 1})`;
+    const serperQuery = `site:${siteDomain} (${termsStr})${geoFilter}${yearFilter} -jobs -career -vacancy`;
     Logger.log(`[${feed.name}] Free fallback engaged: querying Google Serper for "${serperQuery}"`);
 
     try {
-        const response = callSerperWithRotation({ q: serperQuery, num: 10 }, `${feed.name} fallback`);
+        const payload = { q: serperQuery, num: 10, tbs: 'qdr:y' };
+        const response = callSerperWithRotation(payload, `${feed.name} fallback`);
         if (response && response.getResponseCode() === 200) {
             const data = JSON.parse(response.getContentText());
             const items = data.organic || [];
@@ -4230,22 +4259,7 @@ function queryPortalSerperFallback(siteDomain, queryTerms, feed, existingLinks, 
                 safeCachePut(cache, cacheKey, JSON.stringify(items), 21600);
             }
 
-            items.forEach(item => {
-                addCandidateIfNew(
-                    feed.name,
-                    item.title || '',
-                    item.link || '',
-                    item.snippet || item.title || '',
-                    existingLinks,
-                    existingTitleKeys,
-                    bucket,
-                    feed.assumeAfrican === true,
-                    null,
-                    null,
-                    null,
-                    feedStats
-                );
-            });
+            processSerperFallbackItems(items, siteDomain, feed, existingLinks, existingTitleKeys, bucket, feedStats);
         } else {
             const errSnippet = (response && response.getContentText) ? response.getContentText().substring(0, 150) : "";
             Logger.log(`[${feed.name}] Serper fallback returned HTTP ${(response && response.getResponseCode) ? response.getResponseCode() : 'unknown'}${errSnippet ? ": " + errSnippet : ""}. Engaging Google News RSS fallback.`);
@@ -4255,6 +4269,69 @@ function queryPortalSerperFallback(siteDomain, queryTerms, feed, existingLinks, 
         Logger.log(`[${feed.name}] Serper fallback error: ${e.message}. Engaging Google News RSS fallback.`);
         queryPortalRssFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats);
     }
+}
+
+function processSerperFallbackItems(items, siteDomain, feed, existingLinks, existingTitleKeys, bucket, feedStats) {
+    const currentYear = getCurrentYear();
+    items.forEach(item => {
+        const title = item.title || '';
+        const link = item.link || '';
+        const rawSnippet = item.snippet || title;
+        const itemDate = item.date || '';
+
+        // 1. Explicit Serper item.date validation (e.g. "Jun 30, 2021", "2021-06-30", "5 years ago")
+        if (itemDate) {
+            const parsedDate = parseDateFlexible(itemDate);
+            if (parsedDate && !isNaN(parsedDate.getTime())) {
+                const pubYear = parsedDate.getFullYear();
+                if (pubYear < currentYear - 1 && !/\b202[6-9]\b/.test(title + ' ' + rawSnippet)) {
+                    if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                    return;
+                }
+            } else if (/\b(201\d|202[0-4])\b/.test(itemDate) && !/\b202[6-9]\b/.test(title + ' ' + rawSnippet)) {
+                if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
+        }
+
+        // 2. URL slug date pattern validation (e.g. /2021/, /2020/, _2021_)
+        if (/(?:[\/\-_])(201\d|202[0-4])(?:[\/\-_\.])/i.test(link) && !/\b202[6-9]\b/.test(link + ' ' + title)) {
+            if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+            return;
+        }
+
+        // 3. Portal-specific static archive checks:
+        // IFAD calls for proposals (/calls-for-proposal/) are time-bound grants.
+        // If there's no active 2026+ context in title or snippet, drop old calls.
+        if (siteDomain.includes('ifad.org') && link.includes('/calls-for-proposal/')) {
+            const combinedText = `${title} ${rawSnippet}`;
+            const hasRecentContext = new RegExp(`\\b(${currentYear}|${currentYear + 1})\\b`).test(combinedText);
+            const hasExplicitOldYear = /\b(201\d|202[0-4])\b/.test(combinedText);
+            if (hasExplicitOldYear || (!hasRecentContext && /\b(crisis|emergency|rapid response|covid)\b/i.test(combinedText))) {
+                if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+                return;
+            }
+        }
+
+        // Formulate description with explicit publication date prefix
+        const datePrefix = itemDate ? `[Published: ${itemDate}] ` : '';
+        const description = `${datePrefix}${rawSnippet}`.trim();
+
+        addCandidateIfNew(
+            feed.name,
+            title,
+            link,
+            description,
+            existingLinks,
+            existingTitleKeys,
+            bucket,
+            feed.assumeAfrican === true,
+            null,
+            null,
+            null,
+            feedStats
+        );
+    });
 }
 
 function queryPortalRssFallback(siteDomain, queryTerms, feed, existingLinks, existingTitleKeys, bucket, feedStats) {
@@ -4959,8 +5036,12 @@ function auditTrackedOpportunitiesStatus(sheet) {
             let country = String(fullValues[i][10] || '').trim(); // Col 11: Country
             let modality = String(fullValues[i][11] || '').trim(); // Col 12: Bidding Modality
 
-            // 1. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds)
-            const isLegacyContradiction = /\b(?:personal social media advertisement|vendor offering services rather than|focuses (?:primarily )?on the medical sector|medical sector rather than agriculture|completely unrelated to agriculture|homestead garden[-_\s]+crop seeds)\b/i.test(summary) ||
+            // 1. Check for legacy contradictory entries (pre-v5.22 vendor ads, medical supplies, physical seeds, historical archive calls)
+            const isHistoricalArchiveNotice = /\b(?:remittances in times of crisis|digital advisory services to support accelerated rural transformation|integrated fish rice vegetable food systems|grant to apply results-based management.*rural transformation|strengthening the macadamia nuts export value chain|scale-up of agtech and fintech solutions through ifad|artificial intelligence solutions for impact results)\b/i.test(title + ' ' + summary) ||
+                (/\b(201\d|202[0-4])\b/.test(title + ' ' + summary) && !/\b202[6-9]\b/.test(title + ' ' + summary) && (closing === 'Not Specified' || !closing));
+
+            const isLegacyContradiction = isHistoricalArchiveNotice ||
+                /\b(?:personal social media advertisement|vendor offering services rather than|focuses (?:primarily )?on the medical sector|medical sector rather than agriculture|completely unrelated to agriculture|homestead garden[-_\s]+crop seeds)\b/i.test(summary) ||
                 /\b(?:homestead garden[-_\s]+crop seeds)\b/i.test(title);
 
             if (isLegacyContradiction) {
@@ -4974,7 +5055,7 @@ function auditTrackedOpportunitiesStatus(sheet) {
                 newModalities.push(['NOT_APPLICABLE']);
                 legacyContradictionsModified = true;
                 updatedCount++;
-                Logger.log(`[Maintenance] Retired legacy contradictory notice in row ${i + 2}: "${title}"`);
+                Logger.log(`[Maintenance] Retired legacy contradictory/historical notice in row ${i + 2}: "${title}"`);
                 continue;
             }
 
@@ -5020,9 +5101,25 @@ function auditTrackedOpportunitiesStatus(sheet) {
                     newBgs.push(['#f5f5f5']);
                     newFontColors.push(['#757575']);
                 } else {
-                    newStatuses.push(['OPEN (Rolling / TBD)']);
-                    newBgs.push(['#e8f5e9']);
-                    newFontColors.push(['#2e7d32']);
+                    const textToCheck = `${title} ${summary} ${link}`;
+                    const hasHistoricalYear = /\b(201\d|202[0-4])\b/.test(textToCheck) || /(?:[\/\-_])(201\d|202[0-4])(?:[\/\-_\.])/i.test(link);
+                    const hasCurrentYear = /\b202[6-9]\b/.test(textToCheck);
+                    if (hasHistoricalYear && !hasCurrentYear) {
+                        newStatuses.push(['EXPIRED / CLOSED']);
+                        newBgs.push(['#f5f5f5']);
+                        newFontColors.push(['#757575']);
+                        fullValues[i][4] = 'EXPIRED / CLOSED';
+                        fullValues[i][6] = 'NO-GO';
+                        fullValues[i][7] = 0;
+                        fullValues[i][11] = 'NOT_APPLICABLE';
+                        legacyContradictionsModified = true;
+                        updatedCount++;
+                        Logger.log(`[Maintenance] Auto-retired undated historical notice in row ${i + 2}: "${title}"`);
+                    } else {
+                        newStatuses.push(['OPEN (Rolling / TBD)']);
+                        newBgs.push(['#e8f5e9']);
+                        newFontColors.push(['#2e7d32']);
+                    }
                 }
             }
 
@@ -5339,6 +5436,7 @@ function tryOpenAiCompatibleEvaluator(provider, apiKey, prompt, isLastProvider) 
 function evaluateRfpSingleCallWithGemini(batchItems) {
     const geminiApiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
     const today = getLocalDateKey();
+    const currentYear = getCurrentYear();
     if (batchItems.length === 0) return generateFallbackBatch(batchItems);
     const formattedRfpList = batchItems.map(item => {
         const descSnippet = (item.description || '').substring(0, 800).replace(/\s+/g, ' ').trim();
@@ -5453,11 +5551,18 @@ Agri Experience Ltd is a regional consulting firm operating across Sub-Saharan A
 
     2. isOpen:
 
-       TRUE only when the genuine opportunity is still open for submission relative to ${today}, based on an explicit closing/deadline date or clearly stated current-open status.
+       TRUE ONLY when the genuine opportunity is actively open for submission relative to ${today} (Year ${currentYear}), based on:
+       (a) An explicit future closing/deadline date (>= ${today}), OR
+       (b) Clearly verified active ongoing/rolling status within the current operational year (${currentYear}).
 
-       FALSE if the deadline has passed, or if the notice is a Contract Award, past award notice, cancelled, or explicitly marked with status 'Awarded' or 'Closed'.
+       FALSE if:
+       - The closing date has passed relative to ${today}.
+       - The notice is a Contract Award, past award notice, cancelled, or marked 'Closed' or 'Awarded'.
+       - TEMPORAL GROUNDING REQUIREMENT: Solicitations or calls from past calendar years (${currentYear - 2} or earlier: 2019, 2020, 2021, 2022, 2023, 2024, or emergency crisis/pandemic programs from that period) that lack an explicit ${currentYear}+ active extension are HISTORICAL ARCHIVED CALLS. Even if the webpage text does not explicitly say "Closed", past-cycle archive calls MUST be classified as:
+         isOpen: FALSE, score: 0, goNoGo: "NO-GO", businessFit: "NONE",
+         with summary clearly stating: "Historical archived solicitation from a prior funding cycle; no longer active."
 
-       If no closing date is available but the notice appears current and active with no evidence of closure or award, you may set TRUE and use closingDate='Not Specified'.
+       NEVER assume an undated listing is open. If there is NO verifiable deadline AND no explicit indication of active ${currentYear} operational status, isOpen MUST be FALSE.
 
        If isGenuineOpportunity is FALSE, isOpen MUST be FALSE.
 
@@ -6241,7 +6346,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
         return;
     }
 
-    if (isLikelyStaleListing(combinedText)) {
+    if (isLikelyStaleListing(combinedText, cleanLink)) {
         if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
 
         return;
@@ -6251,7 +6356,7 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
     // Discard only if the explicit publication date is from a prior calendar year (e.g. 2025, 2024)
     // without any current or future year (2026+) context in the listing.
     // Fresh opportunities from the current year (2026+) or rolling/dateless opportunities must NEVER be dropped.
-    const pubDateMatch = combinedText.match(/\bpublished[\s:]+([a-z0-9,\s\/:\-]+?)(?:\s*\||\s*$)/i);
+    const pubDateMatch = combinedText.match(/\b(?:published|date)[\s:]+([a-z0-9,\s\/:\-]+?)(?:\s*\||\s*\]|\s*$)/i);
     if (pubDateMatch) {
         const rawPubDate = pubDateMatch[1].trim();
         const parsedPubDate = parseDateFlexible(rawPubDate);
@@ -6263,6 +6368,20 @@ function addCandidateIfNew(sourceName, rawTitle, link, rawDescription, existingL
 
                 return;
             }
+        }
+    }
+
+    // IFAD Portal Static Archive Rule:
+    // www.ifad.org/en/w/calls-for-proposal/... pages are static archives once closed.
+    // If an IFAD call lacks explicit 2026+ operational context in the title, URL, or snippet,
+    // and has no future closing date, it is a historical completed call.
+    if (/ifad\.org\/en\/w\/calls-for-proposal\//i.test(cleanLink)) {
+        const hasCurrentYear = /\b202[6-9]\b/.test(combinedText);
+        const hasHistoricalMarkers = /\b(201\d|202[0-4]|times of crisis|remittances|results-based management.*resolve|integrated fish rice vegetable)\b/i.test(combinedText);
+        if (hasHistoricalMarkers && !hasCurrentYear) {
+            if (feedStats) { feedStats.stale++; feedStats.filtered++; feedStats.preAiRejected++; }
+
+            return;
         }
     }
 
